@@ -161,6 +161,7 @@ contract CustomStablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
+        BlacklistStorage.requireNotBlacklisted(msg.sender);
         BlacklistStorage.requireNotBlacklisted(from);
         BlacklistStorage.requireNotBlacklisted(to);
         super._update(from, to, value);

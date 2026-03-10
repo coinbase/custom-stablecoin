@@ -18,6 +18,7 @@ library BlacklistStorage {
     event UnBlacklisted(address indexed account);
 
     error AddressBlacklisted(address account);
+    error AddressNotBlacklisted(address account);
     error CannotBlacklistZeroAddress();
 
     function layout() internal pure returns (Layout storage $) {
@@ -28,11 +29,13 @@ library BlacklistStorage {
 
     function blacklist(address account) internal {
         if (account == address(0)) revert CannotBlacklistZeroAddress();
+        if (layout().blacklisted[account]) revert AddressBlacklisted(account);
         layout().blacklisted[account] = true;
         emit Blacklisted(account);
     }
 
     function unBlacklist(address account) internal {
+        if (!layout().blacklisted[account]) revert AddressNotBlacklisted(account);
         layout().blacklisted[account] = false;
         emit UnBlacklisted(account);
     }
