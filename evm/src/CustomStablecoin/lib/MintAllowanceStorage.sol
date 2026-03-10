@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.22;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 /**
  * @dev ERC-7201 namespaced storage and logic for rate-limited mint allowances.
  *
@@ -83,7 +85,7 @@ library MintAllowanceStorage {
 
     function _replenishAmount(MinterConfig storage config) private view returns (uint256) {
         uint256 elapsed = block.timestamp - config.lastReplenished;
-        uint256 amount = (elapsed * config.maxAllowance) / config.interval;
+        uint256 amount = Math.mulDiv(elapsed, config.maxAllowance, config.interval);
         uint256 afterReplenish = config.allowance + amount;
         if (afterReplenish > config.maxAllowance) {
             amount = config.maxAllowance - config.allowance;

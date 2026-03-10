@@ -2,8 +2,6 @@
 pragma solidity ^0.8.22;
 
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {ERC20BurnableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import {ERC20PausableUpgradeable} from
     "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {AccessControlDefaultAdminRulesUpgradeable} from
@@ -20,26 +18,30 @@ import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
  *   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
  *     transfer with configurable delay.
  *   - MINT_ROLE – can mint tokens up to their configured allowance.
- *     Granting MINT_ROLE auto-configures a default allowance ($1,000,000 / 24h).
+ *     Granting MINT_ROLE auto-configures a default allowance (1,000,000 tokens / 24h).
  *     Revoking MINT_ROLE clears the allowance.
  *   - MINT_ALLOWANCE_ROLE – can update allowances for existing minters.
+ *   - BURN_ROLE – can burn their own tokens.
  *   - PAUSE_ROLE – can pause/unpause all transfers.
  *   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
  */
 contract CustomStablecoin is
     Initializable,
     ERC20Upgradeable,
-    ERC20BurnableUpgradeable,
     ERC20PausableUpgradeable,
     AccessControlDefaultAdminRulesUpgradeable
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
+    bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
 
     uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
+
+    event Mint(address indexed minter, address indexed to, uint256 amount);
+    event Burn(address indexed burner, uint256 amount);
 
     error MinterNotConfigured(address minter);
 
@@ -55,13 +57,14 @@ contract CustomStablecoin is
         string memory symbol,
         uint8 tokenDecimals
     ) external initializer {
+        // Decimals must be set before granting mint role.
         MetadataStorage.setDecimals(tokenDecimals);
         __ERC20_init(name, symbol);
-        __ERC20Burnable_init();
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
         _grantRole(MINT_ALLOWANCE_ROLE, admin);
         _grantRole(MINT_ROLE, admin);
+        _grantRole(BURN_ROLE, admin);
         _grantRole(PAUSE_ROLE, admin);
         _grantRole(BLACKLIST_ROLE, admin);
     }
@@ -75,8 +78,10 @@ contract CustomStablecoin is
     // -------------------------------------------------------------------------
 
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
+        require(to != address(0), "CustomStablecoin: mint to the zero address");
         MintAllowanceStorage.consume(msg.sender, amount);
         _mint(to, amount);
+        emit Mint(msg.sender, to, amount);
     }
 
     /**
@@ -92,6 +97,15 @@ contract CustomStablecoin is
 
     function estimatedAllowance(address caller) external view returns (uint256) {
         return MintAllowanceStorage.estimatedAllowance(caller);
+    }
+
+    // -------------------------------------------------------------------------
+    // Burning
+    // -------------------------------------------------------------------------
+
+    function burn(uint256 amount) external onlyRole(BURN_ROLE) {
+        _burn(msg.sender, amount);
+        emit Burn(msg.sender, amount);
     }
 
     // -------------------------------------------------------------------------
