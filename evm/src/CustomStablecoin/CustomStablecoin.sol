@@ -43,6 +43,15 @@ contract CustomStablecoin is
     uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
 
+    /// @notice Default role assignments passed to {initialize}.
+    struct Roles {
+        address minter;
+        address mintAllowance;
+        address burner;
+        address pauser;
+        address blacklister;
+    }
+
     /// @notice Emitted when tokens are minted.
     ///
     /// @param minter The address that performed the mint.
@@ -74,27 +83,31 @@ contract CustomStablecoin is
     /*                     EXTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Initializes the stablecoin with the given admin, delay, name, symbol, and decimals.
+    /// @notice Initializes the stablecoin with the given admin, delay, name, symbol, decimals, and role assignments.
     ///
     /// @param admin         The initial default admin address.
     /// @param adminDelay    Delay (in seconds) for admin transfer proposals.
     /// @param name          Token name.
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
-    function initialize(address admin, uint48 adminDelay, string memory name, string memory symbol, uint8 tokenDecimals)
-        external
-        initializer
-    {
-        // Decimals must be set before granting mint role.
+    /// @param roles         Default role assignments for each operational role.
+    function initialize(
+        address admin,
+        uint48 adminDelay,
+        string memory name,
+        string memory symbol,
+        uint8 tokenDecimals,
+        Roles memory roles
+    ) external initializer {
         MetadataStorage.setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole({role: MINT_ALLOWANCE_ROLE, account: admin});
-        _grantRole({role: MINT_ROLE, account: admin});
-        _grantRole({role: BURN_ROLE, account: admin});
-        _grantRole({role: PAUSE_ROLE, account: admin});
-        _grantRole({role: BLACKLIST_ROLE, account: admin});
+        _grantRole({role: MINT_ALLOWANCE_ROLE, account: roles.mintAllowance});
+        _grantRole({role: MINT_ROLE, account: roles.minter});
+        _grantRole({role: BURN_ROLE, account: roles.burner});
+        _grantRole({role: PAUSE_ROLE, account: roles.pauser});
+        _grantRole({role: BLACKLIST_ROLE, account: roles.blacklister});
     }
 
     /// @notice Mints `amount` tokens to `to`.
