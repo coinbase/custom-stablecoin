@@ -1,30 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.22;
+pragma solidity 0.8.30;
 
-import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {ERC20PausableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {AccessControlDefaultAdminRulesUpgradeable} from
     "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import {ERC20PausableUpgradeable} from
+    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import {MetadataStorage} from "./lib/MetadataStorage.sol";
+
 import {BlacklistStorage} from "./lib/BlacklistStorage.sol";
+import {MetadataStorage} from "./lib/MetadataStorage.sol";
 import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
 
-/**
- * @dev Custom stablecoin implementation, upgradeable via a beacon proxy.
- *
- * Roles:
- *   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
- *     transfer with configurable delay.
- *   - MINT_ROLE – can mint tokens up to their configured allowance.
- *     Granting MINT_ROLE auto-configures a default allowance (1,000,000 tokens / 24h).
- *     Revoking MINT_ROLE clears the allowance.
- *   - MINT_ALLOWANCE_ROLE – can update allowances for existing minters.
- *   - BURN_ROLE – can burn their own tokens.
- *   - PAUSE_ROLE – can pause/unpause all transfers.
- *   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
- */
+/// @title CustomStablecoin
+/// @author Coinbase
+/// @notice Custom stablecoin implementation, upgradeable via a beacon proxy.
+///
+/// @dev Roles:
+///   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
+///     transfer with configurable delay.
+///   - MINT_ROLE – can mint tokens up to their configured allowance.
+///     Granting MINT_ROLE auto-configures a default allowance (1,000,000 tokens / 24h).
+///     Revoking MINT_ROLE clears the allowance.
+///   - MINT_ALLOWANCE_ROLE – can update allowances for existing minters.
+///   - BURN_ROLE – can burn their own tokens.
+///   - PAUSE_ROLE – can pause/unpause all transfers.
+///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
 contract CustomStablecoin is
     Initializable,
     ERC20Upgradeable,
@@ -40,16 +41,47 @@ contract CustomStablecoin is
     uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
 
-    event Mint(address indexed minter, address indexed to, uint256 amount);
-    event Burn(address indexed burner, uint256 amount);
+    /// @notice Emitted when tokens are minted.
+    ///
+    /// @param minter The address that performed the mint.
+    /// @param to     The recipient of the minted tokens.
+    /// @param amount The number of tokens minted.
+    event Minted(address indexed minter, address indexed to, uint256 amount);
 
+    /// @notice Emitted when tokens are burned.
+    ///
+    /// @param burner The address that burned tokens.
+    /// @param amount The number of tokens burned.
+    event Burned(address indexed burner, uint256 amount);
+
+    /// @notice Thrown when a minter address has no configured allowance.
+    ///
+    /// @param minter The unconfigured minter address.
     error MinterNotConfigured(address minter);
+
+    /// @notice Thrown when attempting to mint to the zero address.
+    error MintToZeroAddress();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                        CONSTRUCTOR                         */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     EXTERNAL FUNCTIONS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Initializes the stablecoin with the given admin, delay, name, symbol, and decimals.
+    ///
+    /// @param admin         The initial default admin address.
+    /// @param adminDelay    Delay (in seconds) for admin transfer proposals.
+    /// @param name          Token name.
+    /// @param symbol        Token symbol.
+    /// @param tokenDecimals Token decimal places (max 18).
     function initialize(
         address admin,
         uint48 adminDelay,
@@ -69,77 +101,103 @@ contract CustomStablecoin is
         _grantRole(BLACKLIST_ROLE, admin);
     }
 
-    function decimals() public view override returns (uint8) {
-        return MetadataStorage.getDecimals();
-    }
-
-    // -------------------------------------------------------------------------
-    // Minting (rate-limited)
-    // -------------------------------------------------------------------------
-
+    /// @notice Mints `amount` tokens to `to`.
+    ///
+    /// @param to     Recipient address.
+    /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        require(to != address(0), "CustomStablecoin: mint to the zero address");
+        if (to == address(0)) revert MintToZeroAddress();
         MintAllowanceStorage.consume(msg.sender, amount);
         _mint(to, amount);
-        emit Mint(msg.sender, to, amount);
+        emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
-    /**
-     * @dev Updates an existing minter's allowance. Cannot add or remove minters.
-     */
+    /// @notice Updates an existing minter's rate-limit configuration.
+    ///
+    /// @dev Cannot add or remove minters; use role management for that.
+    ///
+    /// @param minter       Minter address to update.
+    /// @param maxAllowance New maximum allowance per interval.
+    /// @param interval     Replenishment interval in seconds.
     function updateMinterAllowance(address minter, uint256 maxAllowance, uint256 interval)
         external
         onlyRole(MINT_ALLOWANCE_ROLE)
     {
-        if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured(minter);
+        if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured({minter: minter});
         MintAllowanceStorage.configureMinter(minter, maxAllowance, interval);
     }
 
+    /// @notice Returns the estimated current mint allowance for `caller`.
+    ///
+    /// @dev Includes any pending replenishment that would apply at the current timestamp.
+    ///
+    /// @param caller Address to query.
+    ///
+    /// @return Current allowance including any pending replenishment.
     function estimatedAllowance(address caller) external view returns (uint256) {
         return MintAllowanceStorage.estimatedAllowance(caller);
     }
 
-    // -------------------------------------------------------------------------
-    // Burning
-    // -------------------------------------------------------------------------
-
+    /// @notice Burns `amount` tokens from the caller's balance.
+    ///
+    /// @param amount Number of tokens to burn.
     function burn(uint256 amount) external onlyRole(BURN_ROLE) {
         _burn(msg.sender, amount);
-        emit Burn(msg.sender, amount);
+        emit Burned({burner: msg.sender, amount: amount});
     }
 
-    // -------------------------------------------------------------------------
-    // Pause
-    // -------------------------------------------------------------------------
-
+    /// @notice Pauses all token transfers.
     function pause() external onlyRole(PAUSE_ROLE) {
         _pause();
     }
 
+    /// @notice Unpauses token transfers.
     function unpause() external onlyRole(PAUSE_ROLE) {
         _unpause();
     }
 
-    // -------------------------------------------------------------------------
-    // Blacklist
-    // -------------------------------------------------------------------------
-
+    /// @notice Adds `account` to the blacklist, preventing it from transferring tokens.
+    ///
+    /// @param account Address to blacklist.
     function blacklist(address account) external onlyRole(BLACKLIST_ROLE) {
         BlacklistStorage.blacklist(account);
     }
 
+    /// @notice Removes `account` from the blacklist.
+    ///
+    /// @param account Address to unblacklist.
     function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
         BlacklistStorage.unBlacklist(account);
     }
 
+    /// @notice Returns whether `account` is blacklisted.
+    ///
+    /// @param account Address to query.
+    ///
+    /// @return True if the address is blacklisted.
     function isBlacklisted(address account) external view returns (bool) {
         return BlacklistStorage.isBlacklisted(account);
     }
 
-    // -------------------------------------------------------------------------
-    // Internal — role grant/revoke hooks
-    // -------------------------------------------------------------------------
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                      PUBLIC FUNCTIONS                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @notice Returns the number of decimals used for token amounts.
+    function decimals() public view override returns (uint8) {
+        return MetadataStorage.getDecimals();
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     INTERNAL FUNCTIONS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Overrides role granting to auto-configure a mint allowance when `MINT_ROLE` is granted.
+    ///
+    /// @param role    The role being granted.
+    /// @param account The account receiving the role.
+    ///
+    /// @return True if the role was newly granted.
     function _grantRole(bytes32 role, address account) internal override returns (bool) {
         bool granted = super._grantRole(role, account);
         if (granted && role == MINT_ROLE) {
@@ -149,6 +207,12 @@ contract CustomStablecoin is
         return granted;
     }
 
+    /// @notice Overrides role revoking to remove the mint allowance when `MINT_ROLE` is revoked.
+    ///
+    /// @param role    The role being revoked.
+    /// @param account The account losing the role.
+    ///
+    /// @return True if the role was previously held and has now been revoked.
     function _revokeRole(bytes32 role, address account) internal override returns (bool) {
         bool revoked = super._revokeRole(role, account);
         if (revoked && role == MINT_ROLE) {
@@ -157,6 +221,11 @@ contract CustomStablecoin is
         return revoked;
     }
 
+    /// @notice Overrides the ERC-20 transfer hook to enforce blacklist and pause checks.
+    ///
+    /// @param from  The sender address.
+    /// @param to    The recipient address.
+    /// @param value The token amount being transferred.
     function _update(address from, address to, uint256 value)
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
