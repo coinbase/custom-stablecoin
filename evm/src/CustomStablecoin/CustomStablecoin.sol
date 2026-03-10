@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {AccessControlDefaultAdminRulesUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
-import {ERC20PausableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
+import {
+    AccessControlDefaultAdminRulesUpgradeable
+} from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import {
+    ERC20PausableUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
@@ -82,13 +84,10 @@ contract CustomStablecoin is
     /// @param name          Token name.
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
-    function initialize(
-        address admin,
-        uint48 adminDelay,
-        string memory name,
-        string memory symbol,
-        uint8 tokenDecimals
-    ) external initializer {
+    function initialize(address admin, uint48 adminDelay, string memory name, string memory symbol, uint8 tokenDecimals)
+        external
+        initializer
+    {
         // Decimals must be set before granting mint role.
         MetadataStorage.setDecimals(tokenDecimals);
         __ERC20_init(name, symbol);

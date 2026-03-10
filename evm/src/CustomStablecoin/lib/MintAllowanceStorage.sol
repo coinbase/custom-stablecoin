@@ -35,8 +35,7 @@ library MintAllowanceStorage {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.MintAllowanceStorage")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION =
-        0x8ad40bec58597f96feccbb9dfe34375a57195afd1bcc28b1b74fed4142680300;
+    bytes32 private constant STORAGE_LOCATION = 0x8ad40bec58597f96feccbb9dfe34375a57195afd1bcc28b1b74fed4142680300;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
@@ -90,10 +89,7 @@ library MintAllowanceStorage {
     function configureMinter(address minter, uint256 maxAllowance, uint256 interval) internal {
         if (maxAllowance == 0 || interval == 0) revert InvalidMinterConfig();
         layout().minters[minter] = MinterConfig({
-            maxAllowance: maxAllowance,
-            allowance: maxAllowance,
-            interval: interval,
-            lastReplenished: block.timestamp
+            maxAllowance: maxAllowance, allowance: maxAllowance, interval: interval, lastReplenished: block.timestamp
         });
         emit MinterConfigured({minter: minter, maxAllowance: maxAllowance, interval: interval});
     }

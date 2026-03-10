@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {AccessControlDefaultAdminRulesUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import {
+    AccessControlDefaultAdminRulesUpgradeable
+} from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
@@ -22,11 +23,7 @@ import {OverrideableBeaconProxy} from "./OverrideableBeaconProxy.sol";
 ///
 /// All mutable state lives in an ERC-7201 namespaced storage struct so the
 /// layout is upgrade-safe and collision-resistant.
-contract OverrideableBeaconProxyFactory is
-    Initializable,
-    AccessControlDefaultAdminRulesUpgradeable,
-    UUPSUpgradeable
-{
+contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
     bytes32 public constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -107,18 +104,11 @@ contract OverrideableBeaconProxyFactory is
     /// @param data   The initializer calldata.
     ///
     /// @return The deterministic proxy address.
-    function getAddress(bytes32 salt, address admin, bytes calldata data)
-        external
-        view
-        returns (address)
-    {
+    function getAddress(bytes32 salt, address admin, bytes calldata data) external view returns (address) {
         bytes memory creationCode = abi.encodePacked(
-            type(OverrideableBeaconProxy).creationCode,
-            abi.encode(_getFactoryStorage().beacon, admin, data)
+            type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, admin, data)
         );
-        bytes32 hash = keccak256(
-            abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(creationCode))
-        );
+        bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(creationCode)));
         return address(uint160(uint256(hash)));
     }
 

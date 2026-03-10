@@ -92,10 +92,7 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /// @param beacon The beacon contract supplying the shared implementation address.
     /// @param admin  The initial proxy admin; must not be the zero address.
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
-    constructor(address beacon, address admin, bytes memory data)
-        payable
-        BeaconProxy(beacon, data)
-    {
+    constructor(address beacon, address admin, bytes memory data) payable BeaconProxy(beacon, data) {
         if (admin == address(0)) revert InvalidProxyAdmin({admin: address(0)});
         _getProxyAdminStorage().admin = admin;
         emit ProxyAdminTransferred({previousAdmin: address(0), newAdmin: admin});

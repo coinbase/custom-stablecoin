@@ -17,8 +17,7 @@ library BlacklistStorage {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.BlacklistStorage")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION =
-        0x51ff35e700a147d742b5b05d2789db8c2672221577bfe847aed99424c3df4b00;
+    bytes32 private constant STORAGE_LOCATION = 0x51ff35e700a147d742b5b05d2789db8c2672221577bfe847aed99424c3df4b00;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */

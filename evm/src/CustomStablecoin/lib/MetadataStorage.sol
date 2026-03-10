@@ -17,8 +17,7 @@ library MetadataStorage {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoinMetadata")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION =
-        0x66b53881ceb340348a909da20537ea4651a41d3894250a80ee92424afdb9d700;
+    bytes32 private constant STORAGE_LOCATION = 0x66b53881ceb340348a909da20537ea4651a41d3894250a80ee92424afdb9d700;
 
     uint8 internal constant MAX_DECIMALS = 18;
 
