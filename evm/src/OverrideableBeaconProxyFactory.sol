@@ -51,7 +51,7 @@ contract OverrideableBeaconProxyFactory is
     // Events / errors
     // -------------------------------------------------------------------------
 
-    event ProxyDeployed(address indexed proxy, address indexed owner, bytes32 salt);
+    event ProxyDeployed(address indexed proxy, address indexed admin, bytes32 salt);
 
     error BeaconNotSet();
 
@@ -83,31 +83,31 @@ contract OverrideableBeaconProxyFactory is
     /**
      * @dev Deploys a new {OverrideableBeaconProxy} using CREATE2 for deterministic addresses.
      * @param salt    Salt for CREATE2; determines the proxy address.
-     * @param owner_  The owner of the new proxy (controls implementation override).
+     * @param admin   The admin of the new proxy (controls implementation override).
      * @param data    Optional initializer calldata forwarded via delegatecall.
      * @return proxy  The address of the newly deployed proxy.
      */
-    function deploy(bytes32 salt, address owner_, bytes calldata data)
+    function deploy(bytes32 salt, address admin, bytes calldata data)
         external
         onlyRole(DEPLOYER_ROLE)
         returns (address proxy)
     {
-        proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, owner_, data));
-        emit ProxyDeployed(proxy, owner_, salt);
+        proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, admin, data));
+        emit ProxyDeployed(proxy, admin, salt);
     }
 
     /**
      * @dev Returns the deterministic address for a proxy deployed with the given
      *      salt and constructor arguments, whether or not it has been deployed.
      */
-    function getAddress(bytes32 salt, address owner_, bytes calldata data)
+    function getAddress(bytes32 salt, address admin, bytes calldata data)
         external
         view
         returns (address)
     {
         bytes memory creationCode = abi.encodePacked(
             type(OverrideableBeaconProxy).creationCode,
-            abi.encode(_getFactoryStorage().beacon, owner_, data)
+            abi.encode(_getFactoryStorage().beacon, admin, data)
         );
         bytes32 hash = keccak256(
             abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(creationCode))
