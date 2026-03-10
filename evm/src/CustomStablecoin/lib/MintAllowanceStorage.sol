@@ -21,10 +21,10 @@ library MintAllowanceStorage {
         uint256 maxAllowance;
         /// @dev The current available allowance.
         uint256 allowance;
-        /// @dev The replenishment interval in seconds.
-        uint256 interval;
-        /// @dev The unix timestamp of the last replenishment.
-        uint256 lastReplenished;
+        /// @dev The replenishment interval in seconds. Packed with `lastReplenished`.
+        uint40 interval;
+        /// @dev The unix timestamp (seconds) of the last replenishment. Packed with `interval`.
+        uint40 lastReplenished;
     }
 
     /// @notice Storage layout for mint allowances.
@@ -89,7 +89,10 @@ library MintAllowanceStorage {
     function configureMinter(address minter, uint256 maxAllowance, uint256 interval) internal {
         if (maxAllowance == 0 || interval == 0) revert InvalidMinterConfig();
         layout().minters[minter] = MinterConfig({
-            maxAllowance: maxAllowance, allowance: maxAllowance, interval: interval, lastReplenished: block.timestamp
+            maxAllowance: maxAllowance,
+            allowance: maxAllowance,
+            interval: uint40(interval),
+            lastReplenished: uint40(block.timestamp)
         });
         emit MinterConfigured({minter: minter, maxAllowance: maxAllowance, interval: interval});
     }
@@ -146,13 +149,13 @@ library MintAllowanceStorage {
     function _replenish(address minter) private {
         MinterConfig storage config = layout().minters[minter];
         if (config.allowance == config.maxAllowance) {
-            config.lastReplenished = block.timestamp;
+            config.lastReplenished = uint40(block.timestamp);
             return;
         }
         uint256 amount = _replenishAmount(config);
         if (amount == 0) return;
         config.allowance += amount;
-        config.lastReplenished = block.timestamp;
+        config.lastReplenished = uint40(block.timestamp);
         emit AllowanceReplenished({minter: minter, allowance: config.allowance, amountReplenished: amount});
     }
 

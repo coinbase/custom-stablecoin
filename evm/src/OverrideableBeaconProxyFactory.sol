@@ -76,7 +76,7 @@ contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAd
     function initialize(address admin, uint48 adminDelay, address beacon_) external initializer {
         if (beacon_ == address(0)) revert BeaconNotSet();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole(DEPLOYER_ROLE, admin);
+        _grantRole({role: DEPLOYER_ROLE, account: admin});
         _getFactoryStorage().beacon = beacon_;
     }
 
@@ -86,14 +86,15 @@ contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAd
     /// @param admin  The admin of the new proxy (controls implementation override).
     /// @param data   Optional initializer calldata forwarded via delegatecall.
     ///
-    /// @return proxy The address of the newly deployed proxy.
+    /// @return The address of the newly deployed proxy.
     function deploy(bytes32 salt, address admin, bytes calldata data)
         external
         onlyRole(DEPLOYER_ROLE)
-        returns (address proxy)
+        returns (address)
     {
-        proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, admin, data));
+        address proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, admin, data));
         emit ProxyDeployed({proxy: proxy, admin: admin, salt: salt});
+        return proxy;
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given

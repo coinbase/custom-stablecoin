@@ -89,15 +89,15 @@ contract CustomStablecoin is
         initializer
     {
         // Decimals must be set before granting mint role.
-        MetadataStorage.setDecimals(tokenDecimals);
+        MetadataStorage.setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole(MINT_ALLOWANCE_ROLE, admin);
-        _grantRole(MINT_ROLE, admin);
-        _grantRole(BURN_ROLE, admin);
-        _grantRole(PAUSE_ROLE, admin);
-        _grantRole(BLACKLIST_ROLE, admin);
+        _grantRole({role: MINT_ALLOWANCE_ROLE, account: admin});
+        _grantRole({role: MINT_ROLE, account: admin});
+        _grantRole({role: BURN_ROLE, account: admin});
+        _grantRole({role: PAUSE_ROLE, account: admin});
+        _grantRole({role: BLACKLIST_ROLE, account: admin});
     }
 
     /// @notice Mints `amount` tokens to `to`.
@@ -106,7 +106,7 @@ contract CustomStablecoin is
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
         if (to == address(0)) revert MintToZeroAddress();
-        MintAllowanceStorage.consume(msg.sender, amount);
+        MintAllowanceStorage.consume({minter: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
@@ -124,17 +124,6 @@ contract CustomStablecoin is
     {
         if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured({minter: minter});
         MintAllowanceStorage.configureMinter(minter, maxAllowance, interval);
-    }
-
-    /// @notice Returns the estimated current mint allowance for `caller`.
-    ///
-    /// @dev Includes any pending replenishment that would apply at the current timestamp.
-    ///
-    /// @param caller Address to query.
-    ///
-    /// @return Current allowance including any pending replenishment.
-    function estimatedAllowance(address caller) external view returns (uint256) {
-        return MintAllowanceStorage.estimatedAllowance(caller);
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
@@ -169,6 +158,17 @@ contract CustomStablecoin is
         BlacklistStorage.unBlacklist(account);
     }
 
+    /// @notice Returns the estimated current mint allowance for `caller`.
+    ///
+    /// @dev Includes any pending replenishment that would apply at the current timestamp.
+    ///
+    /// @param caller Address to query.
+    ///
+    /// @return Current allowance including any pending replenishment.
+    function estimatedAllowance(address caller) external view returns (uint256) {
+        return MintAllowanceStorage.estimatedAllowance({minter: caller});
+    }
+
     /// @notice Returns whether `account` is blacklisted.
     ///
     /// @param account Address to query.
@@ -201,7 +201,9 @@ contract CustomStablecoin is
         bool granted = super._grantRole(role, account);
         if (granted && role == MINT_ROLE) {
             uint256 allowance = DEFAULT_MINT_ALLOWANCE * 10 ** decimals();
-            MintAllowanceStorage.configureMinter(account, allowance, DEFAULT_MINT_INTERVAL);
+            MintAllowanceStorage.configureMinter({
+                minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL
+            });
         }
         return granted;
     }
@@ -215,7 +217,7 @@ contract CustomStablecoin is
     function _revokeRole(bytes32 role, address account) internal override returns (bool) {
         bool revoked = super._revokeRole(role, account);
         if (revoked && role == MINT_ROLE) {
-            MintAllowanceStorage.removeMinter(account);
+            MintAllowanceStorage.removeMinter({minter: account});
         }
         return revoked;
     }
@@ -229,9 +231,9 @@ contract CustomStablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        BlacklistStorage.requireNotBlacklisted(msg.sender);
-        BlacklistStorage.requireNotBlacklisted(from);
-        BlacklistStorage.requireNotBlacklisted(to);
+        BlacklistStorage.requireNotBlacklisted({account: msg.sender});
+        BlacklistStorage.requireNotBlacklisted({account: from});
+        BlacklistStorage.requireNotBlacklisted({account: to});
         super._update(from, to, value);
     }
 }

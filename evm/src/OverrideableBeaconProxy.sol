@@ -123,13 +123,6 @@ contract OverrideableBeaconProxy is BeaconProxy {
         emit ImplementationOverrideSet({implementation: implementation});
     }
 
-    /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
-    ///
-    /// @return The override implementation address.
-    function implementationOverride() external view returns (address) {
-        return ERC1967Utils.getImplementation();
-    }
-
     /// @notice Starts a two-step transfer of the proxy admin role to `newAdmin`.
     ///
     /// @dev Setting `newAdmin` to `address(0)` cancels a pending transfer.
@@ -148,6 +141,13 @@ contract OverrideableBeaconProxy is BeaconProxy {
         $.admin = msg.sender;
         delete $.pendingAdmin;
         emit ProxyAdminTransferred({previousAdmin: oldAdmin, newAdmin: msg.sender});
+    }
+
+    /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
+    ///
+    /// @return The override implementation address.
+    function implementationOverride() external view returns (address) {
+        return ERC1967Utils.getImplementation();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
