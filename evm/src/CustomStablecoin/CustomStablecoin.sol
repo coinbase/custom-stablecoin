@@ -61,9 +61,6 @@ contract CustomStablecoin is
     /// @param minter The unconfigured minter address.
     error MinterNotConfigured(address minter);
 
-    /// @notice Thrown when attempting to mint to the zero address.
-    error MintToZeroAddress();
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -105,7 +102,6 @@ contract CustomStablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        if (to == address(0)) revert MintToZeroAddress();
         MintAllowanceStorage.consume({minter: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});

@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {
     AccessControlDefaultAdminRulesUpgradeable
 } from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
@@ -106,11 +107,12 @@ contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAd
     ///
     /// @return The deterministic proxy address.
     function getAddress(bytes32 salt, address admin, bytes calldata data) external view returns (address) {
-        bytes memory creationCode = abi.encodePacked(
-            type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, admin, data)
+        bytes32 bytecodeHash = keccak256(
+            abi.encodePacked(
+                type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, admin, data)
+            )
         );
-        bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(creationCode)));
-        return address(uint160(uint256(hash)));
+        return Create2.computeAddress(salt, bytecodeHash);
     }
 
     /// @notice Returns the shared beacon address used by all proxies deployed from this factory.
