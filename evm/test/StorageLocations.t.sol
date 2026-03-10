@@ -9,20 +9,20 @@ contract StorageLocationsTest is Test {
     }
 
     function test_MintAllowanceStorageLocation() public pure {
-        bytes32 expected = 0x8ad40bec58597f96feccbb9dfe34375a57195afd1bcc28b1b74fed4142680300;
-        bytes32 computed = _erc7201Slot("coinbase.storage.MintAllowanceStorage");
+        bytes32 expected = 0x32a75239f6b2b5cfaaa5a083b38ae38049a46ac226ace8c1f2cd933deef68500;
+        bytes32 computed = _erc7201Slot("coinbase.storage.CustomStablecoin.MintAllowance");
         assertEq(computed, expected, "MintAllowanceStorage slot mismatch");
     }
 
     function test_BlacklistStorageLocation() public pure {
-        bytes32 expected = 0x51ff35e700a147d742b5b05d2789db8c2672221577bfe847aed99424c3df4b00;
-        bytes32 computed = _erc7201Slot("coinbase.storage.BlacklistStorage");
+        bytes32 expected = 0xaa42287b5df5a176a661599ae27fcd3a6641452f1e83e14656b2ec30bf606600;
+        bytes32 computed = _erc7201Slot("coinbase.storage.CustomStablecoin.Blacklist");
         assertEq(computed, expected, "BlacklistStorage slot mismatch");
     }
 
     function test_MetadataStorageLocation() public pure {
-        bytes32 expected = 0x66b53881ceb340348a909da20537ea4651a41d3894250a80ee92424afdb9d700;
-        bytes32 computed = _erc7201Slot("coinbase.storage.CustomStablecoinMetadata");
+        bytes32 expected = 0xeba5b3977d3b9de82516e2e616f881364b5bda38308f816dd84f2ec3c1947200;
+        bytes32 computed = _erc7201Slot("coinbase.storage.CustomStablecoin.Metadata");
         assertEq(computed, expected, "MetadataStorage slot mismatch");
     }
 

@@ -28,14 +28,14 @@ library MintAllowanceStorage {
     }
 
     /// @notice Storage layout for mint allowances.
-    /// @custom:storage-location erc7201:coinbase.storage.MintAllowanceStorage
+    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.MintAllowance
     struct Layout {
         /// @dev Maps each minter address to its rate-limit configuration.
         mapping(address minter => MinterConfig config) minters;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.MintAllowanceStorage")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0x8ad40bec58597f96feccbb9dfe34375a57195afd1bcc28b1b74fed4142680300;
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.MintAllowance")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0x32a75239f6b2b5cfaaa5a083b38ae38049a46ac226ace8c1f2cd933deef68500;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */

@@ -10,14 +10,14 @@ library MetadataStorage {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for token metadata.
-    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoinMetadata
+    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.Metadata
     struct Layout {
         /// @dev The number of decimals for the token.
         uint8 decimals;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoinMetadata")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0x66b53881ceb340348a909da20537ea4651a41d3894250a80ee92424afdb9d700;
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0xeba5b3977d3b9de82516e2e616f881364b5bda38308f816dd84f2ec3c1947200;
 
     uint8 internal constant MAX_DECIMALS = 18;
 

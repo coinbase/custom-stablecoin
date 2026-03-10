@@ -10,14 +10,14 @@ library BlacklistStorage {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for the blacklist.
-    /// @custom:storage-location erc7201:coinbase.storage.BlacklistStorage
+    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.Blacklist
     struct Layout {
         /// @dev Maps each account address to its blacklist status.
         mapping(address account => bool isBlacklisted) blacklisted;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.BlacklistStorage")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0x51ff35e700a147d742b5b05d2789db8c2672221577bfe847aed99424c3df4b00;
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Blacklist")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0xaa42287b5df5a176a661599ae27fcd3a6641452f1e83e14656b2ec30bf606600;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
