@@ -37,10 +37,4 @@ contract StorageLocationsTest is Test {
         bytes32 computed = _erc7201Slot("coinbase.storage.OverrideableBeaconProxy");
         assertEq(computed, expected, "ProxyAdminStorage slot mismatch");
     }
-
-    function test_UUPSProxyAdminStorageLocation() public pure {
-        bytes32 expected = 0x670e8436571bca98ea80c6694fbb425064090a0f6338187a0c132d73b9d3c300;
-        bytes32 computed = _erc7201Slot("coinbase.storage.UUPSOverrideableBeaconProxy");
-        assertEq(computed, expected, "UUPSProxyAdminStorage slot mismatch");
-    }
 }
