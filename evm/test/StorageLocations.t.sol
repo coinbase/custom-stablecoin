@@ -32,9 +32,9 @@ contract StorageLocationsTest is Test {
         assertEq(computed, expected, "FactoryStorage slot mismatch");
     }
 
-    function test_ProxyAdminStorageLocation() public pure {
+    function test_OverrideableBeaconProxyStorageLocation() public pure {
         bytes32 expected = 0x48bf781b3e066d6328e65796599f6ef321293b13fff4a961d8e8d5252f809800;
         bytes32 computed = _erc7201Slot("coinbase.storage.OverrideableBeaconProxy");
-        assertEq(computed, expected, "ProxyAdminStorage slot mismatch");
+        assertEq(computed, expected, "OverrideableBeaconProxyStorage slot mismatch");
     }
 }

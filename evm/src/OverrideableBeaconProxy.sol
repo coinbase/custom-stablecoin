@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
+import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
 /// @title OverrideableBeaconProxy
@@ -16,37 +17,31 @@ import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 ///   1. If the ERC-1967 implementation slot is set, use it directly (opt-out).
 ///   2. Otherwise, query the beacon for the shared implementation (default).
 ///
-/// Admin state is stored in an ERC-7201 namespaced slot so it cannot
-/// collide with implementation storage or ERC-1967 slots. Admin functions
-/// use unique selectors (`proxyAdmin`, `transferProxyAdmin`, etc.) to
-/// avoid clashing with selectors the implementation may expose.
+/// The proxy admin address is stored in the ERC-1967 admin slot for
+/// compatibility with block explorers and standard tooling. The pending
+/// admin (for two-step transfers) is stored in an ERC-7201 namespaced
+/// slot to avoid collisions. Admin functions use unique selectors
+/// (`proxyAdmin`, `transferProxyAdmin`, etc.) to avoid clashing with
+/// selectors the implementation may expose.
 contract OverrideableBeaconProxy is BeaconProxy {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Storage layout for proxy admin state.
+    /// @notice Storage layout for the OverrideableBeaconProxy.
     /// @custom:storage-location erc7201:coinbase.storage.OverrideableBeaconProxy
-    struct ProxyAdminStorage {
-        /// @dev The current proxy admin address.
-        address admin;
+    struct OverrideableBeaconProxyStorage {
         /// @dev The pending proxy admin address, set during a two-step transfer.
         address pendingAdmin;
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.OverrideableBeaconProxy")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant PROXY_ADMIN_STORAGE_LOCATION =
+    bytes32 private constant OVERRIDEABLE_BEACON_PROXY_STORAGE_LOCATION =
         0x48bf781b3e066d6328e65796599f6ef321293b13fff4a961d8e8d5252f809800;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Emitted when the proxy admin is changed.
-    ///
-    /// @param previousAdmin The previous admin address.
-    /// @param newAdmin      The new admin address.
-    event ProxyAdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 
     /// @notice Emitted when a proxy admin transfer is initiated.
     ///
@@ -54,10 +49,8 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /// @param newAdmin      The pending admin that must accept.
     event ProxyAdminTransferStarted(address indexed previousAdmin, address indexed newAdmin);
 
-    /// @notice Emitted when the implementation override is set.
-    ///
-    /// @param implementation The new override address, or `address(0)` to clear.
-    event ImplementationOverrideSet(address indexed implementation);
+    /// @notice Emitted when the implementation override is cleared, returning to beacon behavior.
+    event ImplementationOverrideCleared();
 
     /// @notice Thrown when the provided implementation address has no code.
     ///
@@ -94,8 +87,8 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
     constructor(address beacon, address admin, bytes memory data) payable BeaconProxy(beacon, data) {
         if (admin == address(0)) revert InvalidProxyAdmin({admin: address(0)});
-        _getProxyAdminStorage().admin = admin;
-        emit ProxyAdminTransferred({previousAdmin: address(0), newAdmin: admin});
+        StorageSlot.getAddressSlot(ERC1967Utils.ADMIN_SLOT).value = admin;
+        emit IERC1967.AdminChanged(address(0), admin);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -120,7 +113,11 @@ contract OverrideableBeaconProxy is BeaconProxy {
             revert InvalidImplementation({implementation: implementation});
         }
         StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = implementation;
-        emit ImplementationOverrideSet({implementation: implementation});
+        if (implementation != address(0)) {
+            emit IERC1967.Upgraded(implementation);
+        } else {
+            emit ImplementationOverrideCleared();
+        }
     }
 
     /// @notice Starts a two-step transfer of the proxy admin role to `newAdmin`.
@@ -129,18 +126,18 @@ contract OverrideableBeaconProxy is BeaconProxy {
     ///
     /// @param newAdmin The address to transfer the proxy admin role to.
     function transferProxyAdmin(address newAdmin) external onlyProxyAdmin {
-        _getProxyAdminStorage().pendingAdmin = newAdmin;
+        _getOverrideableBeaconProxyStorage().pendingAdmin = newAdmin;
         emit ProxyAdminTransferStarted({previousAdmin: proxyAdmin(), newAdmin: newAdmin});
     }
 
     /// @notice Accepts the proxy admin role. Must be called by the pending admin.
     function acceptProxyAdmin() external {
-        ProxyAdminStorage storage $ = _getProxyAdminStorage();
+        OverrideableBeaconProxyStorage storage $ = _getOverrideableBeaconProxyStorage();
         if (msg.sender != $.pendingAdmin) revert UnauthorizedProxyAdmin({caller: msg.sender});
-        address oldAdmin = $.admin;
-        $.admin = msg.sender;
+        address oldAdmin = ERC1967Utils.getAdmin();
+        StorageSlot.getAddressSlot(ERC1967Utils.ADMIN_SLOT).value = msg.sender;
         delete $.pendingAdmin;
-        emit ProxyAdminTransferred({previousAdmin: oldAdmin, newAdmin: msg.sender});
+        emit IERC1967.AdminChanged(oldAdmin, msg.sender);
     }
 
     /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
@@ -158,14 +155,14 @@ contract OverrideableBeaconProxy is BeaconProxy {
     ///
     /// @return The proxy admin address.
     function proxyAdmin() public view returns (address) {
-        return _getProxyAdminStorage().admin;
+        return ERC1967Utils.getAdmin();
     }
 
     /// @notice Returns the pending proxy admin address, or `address(0)` if none.
     ///
     /// @return The pending proxy admin address.
     function pendingProxyAdmin() public view returns (address) {
-        return _getProxyAdminStorage().pendingAdmin;
+        return _getOverrideableBeaconProxyStorage().pendingAdmin;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -195,13 +192,12 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /*                     PRIVATE FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Returns a storage pointer to the ERC-7201 namespaced proxy admin layout struct.
+    /// @notice Returns a storage pointer to the ERC-7201 namespaced pending admin layout struct.
     ///
     /// @return $ Storage pointer to the layout struct.
-    function _getProxyAdminStorage() private pure returns (ProxyAdminStorage storage $) {
-        // Assembly is required to load from the ERC-7201 namespaced storage slot.
+    function _getOverrideableBeaconProxyStorage() private pure returns (OverrideableBeaconProxyStorage storage $) {
         assembly {
-            $.slot := PROXY_ADMIN_STORAGE_LOCATION
+            $.slot := OVERRIDEABLE_BEACON_PROXY_STORAGE_LOCATION
         }
     }
 }
