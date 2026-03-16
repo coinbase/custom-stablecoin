@@ -13,9 +13,9 @@ import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
-import {BlacklistStorage} from "./lib/BlacklistStorage.sol";
-import {MetadataStorage} from "./lib/MetadataStorage.sol";
-import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
+import {Blacklistable} from "./lib/Blacklistable.sol";
+import {MintAllowance} from "./lib/MintAllowance.sol";
+import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoins
 /// @author Coinbase
@@ -35,7 +35,10 @@ contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
     ERC20PausableUpgradeable,
-    AccessControlDefaultAdminRulesUpgradeable
+    AccessControlDefaultAdminRulesUpgradeable,
+    Blacklistable,
+    MintAllowance,
+    TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
@@ -110,7 +113,7 @@ contract Stablecoin is
         uint8 tokenDecimals,
         InitialRoles memory roles
     ) external initializer {
-        MetadataStorage.setDecimals({value: tokenDecimals});
+        _setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
@@ -126,7 +129,7 @@ contract Stablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        MintAllowanceStorage.consume({minter: msg.sender, amount: amount});
+        _consumeMintAllowance({minter: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
@@ -143,7 +146,7 @@ contract Stablecoin is
         onlyRole(MINT_ALLOWANCE_ROLE)
     {
         if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured({minter: minter});
-        MintAllowanceStorage.configureMinter(minter, maxAllowance, interval);
+        _configureMinter(minter, maxAllowance, interval);
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
@@ -168,14 +171,14 @@ contract Stablecoin is
     ///
     /// @param account Address to blacklist.
     function blacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        BlacklistStorage.blacklist(account);
+        _blacklist(account);
     }
 
     /// @notice Removes `account` from the blacklist.
     ///
     /// @param account Address to unblacklist.
     function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        BlacklistStorage.unBlacklist(account);
+        _unBlacklist(account);
     }
 
     /// @notice Sets a direct implementation for the proxy, opting out of the beacon.
@@ -198,26 +201,6 @@ contract Stablecoin is
         }
     }
 
-    /// @notice Returns the estimated current mint allowance for `caller`.
-    ///
-    /// @dev Includes any pending replenishment that would apply at the current timestamp.
-    ///
-    /// @param caller Address to query.
-    ///
-    /// @return Current allowance including any pending replenishment.
-    function estimatedAllowance(address caller) external view returns (uint256) {
-        return MintAllowanceStorage.estimatedAllowance({minter: caller});
-    }
-
-    /// @notice Returns whether `account` is blacklisted.
-    ///
-    /// @param account Address to query.
-    ///
-    /// @return True if the address is blacklisted.
-    function isBlacklisted(address account) external view returns (bool) {
-        return BlacklistStorage.isBlacklisted(account);
-    }
-
     /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
     ///
     /// @return The override implementation address.
@@ -230,8 +213,10 @@ contract Stablecoin is
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Returns the number of decimals used for token amounts.
-    function decimals() public view override returns (uint8) {
-        return MetadataStorage.getDecimals();
+    ///
+    /// @return The number of decimals.
+    function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
+        return super.decimals();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -248,9 +233,7 @@ contract Stablecoin is
         bool granted = super._grantRole(role, account);
         if (granted && role == MINT_ROLE) {
             uint256 allowance = DEFAULT_MINT_ALLOWANCE * 10 ** decimals();
-            MintAllowanceStorage.configureMinter({
-                minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL
-            });
+            _configureMinter({minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL});
         }
         return granted;
     }
@@ -264,7 +247,7 @@ contract Stablecoin is
     function _revokeRole(bytes32 role, address account) internal override returns (bool) {
         bool revoked = super._revokeRole(role, account);
         if (revoked && role == MINT_ROLE) {
-            MintAllowanceStorage.removeMinter({minter: account});
+            _removeMinter({minter: account});
         }
         return revoked;
     }
@@ -278,9 +261,9 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        BlacklistStorage.requireNotBlacklisted({account: msg.sender});
-        BlacklistStorage.requireNotBlacklisted({account: from});
-        BlacklistStorage.requireNotBlacklisted({account: to});
+        _requireNotBlacklisted({account: msg.sender});
+        _requireNotBlacklisted({account: from});
+        _requireNotBlacklisted({account: to});
         super._update(from, to, value);
     }
 }

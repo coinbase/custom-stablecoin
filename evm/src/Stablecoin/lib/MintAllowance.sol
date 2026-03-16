@@ -3,14 +3,14 @@ pragma solidity ^0.8.0;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @title MintAllowanceStorage
+/// @title MintAllowance
 /// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for rate-limited mint allowances.
 ///
 /// @dev Each minter has a maximum allowance that replenishes linearly over a
 /// configurable interval. Minting deducts from the current allowance;
 /// once depleted the minter must wait for it to refill.
-library MintAllowanceStorage {
+abstract contract MintAllowance {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -29,13 +29,14 @@ library MintAllowanceStorage {
 
     /// @notice Storage layout for mint allowances.
     /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.MintAllowance
-    struct Layout {
+    struct MintAllowanceLayout {
         /// @dev Maps each minter address to its rate-limit configuration.
         mapping(address minter => MinterConfig config) minters;
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.MintAllowance")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0x32a75239f6b2b5cfaaa5a083b38ae38049a46ac226ace8c1f2cd933deef68500;
+    bytes32 private constant MINT_ALLOWANCE_STORAGE_LOCATION =
+        0x32a75239f6b2b5cfaaa5a083b38ae38049a46ac226ace8c1f2cd933deef68500;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
@@ -78,6 +79,20 @@ library MintAllowanceStorage {
     error InvalidMinterConfig();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                      PUBLIC FUNCTIONS                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Returns the estimated allowance for `minter` including pending replenishment.
+    ///
+    /// @param minter The minter address to query.
+    ///
+    /// @return Current allowance plus any amount that would be replenished at the current timestamp.
+    function estimatedAllowance(address minter) public view virtual returns (uint256) {
+        MinterConfig storage config = _getMintAllowanceLayout().minters[minter];
+        return config.allowance + _replenishAmount(config);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -86,9 +101,9 @@ library MintAllowanceStorage {
     /// @param minter       The minter address to configure.
     /// @param maxAllowance The maximum allowance the minter may accumulate.
     /// @param interval     The replenishment interval in seconds.
-    function configureMinter(address minter, uint256 maxAllowance, uint256 interval) internal {
+    function _configureMinter(address minter, uint256 maxAllowance, uint256 interval) internal {
         if (maxAllowance == 0 || interval == 0) revert InvalidMinterConfig();
-        layout().minters[minter] = MinterConfig({
+        _getMintAllowanceLayout().minters[minter] = MinterConfig({
             maxAllowance: maxAllowance,
             allowance: maxAllowance,
             interval: uint40(interval),
@@ -100,8 +115,8 @@ library MintAllowanceStorage {
     /// @notice Removes `minter` and deletes its configuration.
     ///
     /// @param minter The minter address to remove.
-    function removeMinter(address minter) internal {
-        delete layout().minters[minter];
+    function _removeMinter(address minter) internal {
+        delete _getMintAllowanceLayout().minters[minter];
         emit MinterRemoved({minter: minter});
     }
 
@@ -109,34 +124,14 @@ library MintAllowanceStorage {
     ///
     /// @param minter The minter address.
     /// @param amount The amount to consume.
-    function consume(address minter, uint256 amount) internal {
+    function _consumeMintAllowance(address minter, uint256 amount) internal {
         _replenish(minter);
-        MinterConfig storage config = layout().minters[minter];
+        MinterConfig storage config = _getMintAllowanceLayout().minters[minter];
         if (amount > config.allowance) {
             revert MintAllowanceExceeded({minter: minter, amount: amount, allowance: config.allowance});
         }
         config.allowance -= amount;
         emit AllowanceConsumed({minter: minter, amount: amount, remaining: config.allowance});
-    }
-
-    /// @notice Returns the estimated allowance for `minter` including pending replenishment.
-    ///
-    /// @param minter The minter address to query.
-    ///
-    /// @return Current allowance plus any amount that would be replenished at the current timestamp.
-    function estimatedAllowance(address minter) internal view returns (uint256) {
-        MinterConfig storage config = layout().minters[minter];
-        return config.allowance + _replenishAmount(config);
-    }
-
-    /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
-    ///
-    /// @return $ Storage pointer to the layout struct.
-    function layout() internal pure returns (Layout storage $) {
-        // Assembly is required to load from the ERC-7201 namespaced storage slot.
-        assembly {
-            $.slot := STORAGE_LOCATION
-        }
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -147,7 +142,7 @@ library MintAllowanceStorage {
     ///
     /// @param minter The minter address to replenish.
     function _replenish(address minter) private {
-        MinterConfig storage config = layout().minters[minter];
+        MinterConfig storage config = _getMintAllowanceLayout().minters[minter];
         if (config.allowance == config.maxAllowance) {
             config.lastReplenished = uint40(block.timestamp);
             return;
@@ -157,6 +152,15 @@ library MintAllowanceStorage {
         config.allowance += amount;
         config.lastReplenished = uint40(block.timestamp);
         emit AllowanceReplenished({minter: minter, allowance: config.allowance, amountReplenished: amount});
+    }
+
+    /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
+    ///
+    /// @return $ Storage pointer to the layout struct.
+    function _getMintAllowanceLayout() private pure returns (MintAllowanceLayout storage $) {
+        assembly {
+            $.slot := MINT_ALLOWANCE_STORAGE_LOCATION
+        }
     }
 
     /// @notice Calculates how much allowance would be added to `config` at the current timestamp.
