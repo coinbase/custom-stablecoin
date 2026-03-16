@@ -8,7 +8,10 @@ import {
     ERC20PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
 import {BlacklistStorage} from "./lib/BlacklistStorage.sol";
 import {MetadataStorage} from "./lib/MetadataStorage.sol";
@@ -64,6 +67,14 @@ contract Stablecoin is
     /// @param burner The address that burned tokens.
     /// @param amount The number of tokens burned.
     event Burned(address indexed burner, uint256 amount);
+
+    /// @notice Emitted when the implementation override is cleared, returning to beacon behavior.
+    event ImplementationOverrideCleared();
+
+    /// @notice Thrown when the provided implementation address has no code.
+    ///
+    /// @param implementation The invalid implementation address.
+    error InvalidImplementation(address implementation);
 
     /// @notice Thrown when a minter address has no configured allowance.
     ///
@@ -167,6 +178,26 @@ contract Stablecoin is
         BlacklistStorage.unBlacklist(account);
     }
 
+    /// @notice Sets a direct implementation for the proxy, opting out of the beacon.
+    ///
+    /// @dev When called via delegatecall through an {OverrideableBeaconProxy}, this writes
+    /// to the proxy's ERC-1967 implementation slot. On the next call, the proxy's
+    /// `_implementation()` will return this address directly, skipping the beacon.
+    /// Pass `address(0)` to clear the override and return to beacon behavior.
+    ///
+    /// @param implementation The implementation address to set, or `address(0)` to clear.
+    function setImplementationOverride(address implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (implementation != address(0) && implementation.code.length == 0) {
+            revert InvalidImplementation({implementation: implementation});
+        }
+        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = implementation;
+        if (implementation != address(0)) {
+            emit IERC1967.Upgraded(implementation);
+        } else {
+            emit ImplementationOverrideCleared();
+        }
+    }
+
     /// @notice Returns the estimated current mint allowance for `caller`.
     ///
     /// @dev Includes any pending replenishment that would apply at the current timestamp.
@@ -185,6 +216,13 @@ contract Stablecoin is
     /// @return True if the address is blacklisted.
     function isBlacklisted(address account) external view returns (bool) {
         return BlacklistStorage.isBlacklisted(account);
+    }
+
+    /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
+    ///
+    /// @return The override implementation address.
+    function implementationOverride() external view returns (address) {
+        return ERC1967Utils.getImplementation();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
