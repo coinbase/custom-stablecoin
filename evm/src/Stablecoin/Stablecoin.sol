@@ -7,6 +7,9 @@ import {
 import {
     ERC20PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
+import {
+    ERC20PermitUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
@@ -35,6 +38,7 @@ contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
     ERC20PausableUpgradeable,
+    ERC20PermitUpgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
     Blacklistable,
     MintAllowance,
@@ -115,6 +119,7 @@ contract Stablecoin is
     ) external initializer {
         _setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
+        __ERC20Permit_init(name);
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
         _grantRole({role: MINT_ALLOWANCE_ROLE, account: roles.mintAllowance});
