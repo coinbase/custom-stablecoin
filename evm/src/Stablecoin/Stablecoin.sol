@@ -14,9 +14,9 @@ import {BlacklistStorage} from "./lib/BlacklistStorage.sol";
 import {MetadataStorage} from "./lib/MetadataStorage.sol";
 import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
 
-/// @title CustomStablecoin
+/// @title Stablecoins
 /// @author Coinbase
-/// @notice Custom stablecoin implementation, upgradeable via a beacon proxy.
+/// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
 ///   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
@@ -28,7 +28,7 @@ import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
-contract CustomStablecoin is
+contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
     ERC20PausableUpgradeable,
@@ -44,7 +44,7 @@ contract CustomStablecoin is
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
 
     /// @notice Default role assignments passed to {initialize}.
-    struct Roles {
+    struct InitialRoles {
         address minter;
         address mintAllowance;
         address burner;
@@ -97,7 +97,7 @@ contract CustomStablecoin is
         string memory name,
         string memory symbol,
         uint8 tokenDecimals,
-        Roles memory roles
+        InitialRoles memory roles
     ) external initializer {
         MetadataStorage.setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);

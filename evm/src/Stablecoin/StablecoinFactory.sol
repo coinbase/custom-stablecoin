@@ -8,12 +8,12 @@ import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-import {OverrideableBeaconProxy} from "./OverrideableBeaconProxy.sol";
+import {OverrideableBeaconProxy} from "../OverrideableBeaconProxy.sol";
+import {Stablecoin} from "./Stablecoin.sol";
 
-/// @title OverrideableBeaconProxyFactory
+/// @title StablecoinFactory
 /// @author Coinbase
-/// @notice UUPS-upgradeable factory that deploys {OverrideableBeaconProxy} instances
-/// pointing to a shared beacon.
+/// @notice UUPS-upgradeable factory that deploys {OverrideableBeaconProxy} proxy that points to a shared {Stablecoin} implementation.
 ///
 /// @dev The beacon is set once during initialization and cannot be changed.
 ///
@@ -24,7 +24,7 @@ import {OverrideableBeaconProxy} from "./OverrideableBeaconProxy.sol";
 ///
 /// All mutable state lives in an ERC-7201 namespaced storage struct so the
 /// layout is upgrade-safe and collision-resistant.
-contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
+contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
     bytes32 public constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -32,15 +32,15 @@ contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAd
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for factory state.
-    /// @custom:storage-location erc7201:coinbase.storage.OverrideableBeaconProxyFactory
+    /// @custom:storage-location erc7201:coinbase.storage.StablecoinFactory
     struct FactoryStorage {
         /// @dev The shared beacon address used by all deployed proxies.
         address beacon;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.OverrideableBeaconProxyFactory")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.StablecoinFactory")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant FACTORY_STORAGE_LOCATION =
-        0x2f479ea380745b703f8a394ca62a27f1007b7f21f9ec66b12e43f39167f1b900;
+        0x0359e5965fc60a4d7c47813a3cae31d4fea873da7c55a52a52894a5078215f00;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
@@ -72,44 +72,75 @@ contract OverrideableBeaconProxyFactory is Initializable, AccessControlDefaultAd
     /// @notice Initializes the factory with an admin, delay, and beacon address.
     ///
     /// @param admin      Initial default admin (two-step transfer with delay).
+    /// @param deployer   Address that can deploy new {Stablecoin} instances.
     /// @param adminDelay Delay (in seconds) for admin transfer proposals.
     /// @param beacon_    Beacon address; set once and cannot be changed.
-    function initialize(address admin, uint48 adminDelay, address beacon_) external initializer {
+    function initialize(address admin, address deployer, uint48 adminDelay, address beacon_) external initializer {
         if (beacon_ == address(0)) revert BeaconNotSet();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole({role: DEPLOYER_ROLE, account: admin});
+        _grantRole({role: DEPLOYER_ROLE, account: deployer});
         _getFactoryStorage().beacon = beacon_;
     }
 
-    /// @notice Deploys a new {OverrideableBeaconProxy} using CREATE2 for deterministic addresses.
+    /// @notice Deploys a new {Stablecoin} behind an {OverrideableBeaconProxy} using CREATE2.
     ///
-    /// @param salt   Salt for CREATE2; determines the proxy address.
-    /// @param admin  The admin of the new proxy (controls implementation override).
-    /// @param data   Optional initializer calldata forwarded via delegatecall.
+    /// @param salt          Salt for CREATE2; determines the proxy address.
+    /// @param proxyAdmin    The admin of the new proxy (controls implementation override).
+    /// @param stablecoinAdmin The initial default admin of the Stablecoin.
+    /// @param adminDelay    Delay (in seconds) for Stablecoin admin transfer proposals.
+    /// @param name          Token name.
+    /// @param symbol        Token symbol.
+    /// @param tokenDecimals Token decimal places (max 18).
+    /// @param roles         Default role assignments for each operational role.
     ///
     /// @return The address of the newly deployed proxy.
-    function deploy(bytes32 salt, address admin, bytes calldata data)
-        external
-        onlyRole(DEPLOYER_ROLE)
-        returns (address)
-    {
-        address proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, admin, data));
-        emit ProxyDeployed({proxy: proxy, admin: admin, salt: salt});
+    function deploy(
+        bytes32 salt,
+        address proxyAdmin,
+        address stablecoinAdmin,
+        uint48 adminDelay,
+        string calldata name,
+        string calldata symbol,
+        uint8 tokenDecimals,
+        Stablecoin.InitialRoles calldata roles
+    ) external onlyRole(DEPLOYER_ROLE) returns (address) {
+        bytes memory data = abi.encodeCall(
+            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles)
+        );
+        address proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, proxyAdmin, data));
+        emit ProxyDeployed({proxy: proxy, admin: proxyAdmin, salt: salt});
         return proxy;
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given
-    /// salt and constructor arguments, whether or not it has been deployed.
+    /// parameters, whether or not it has been deployed.
     ///
-    /// @param salt   The CREATE2 salt.
-    /// @param admin  The proxy admin address.
-    /// @param data   The initializer calldata.
+    /// @param salt          The CREATE2 salt.
+    /// @param proxyAdmin    The proxy admin address.
+    /// @param stablecoinAdmin The initial default admin of the Stablecoin.
+    /// @param adminDelay    Delay (in seconds) for Stablecoin admin transfer proposals.
+    /// @param name          Token name.
+    /// @param symbol        Token symbol.
+    /// @param tokenDecimals Token decimal places (max 18).
+    /// @param roles         Default role assignments for each operational role.
     ///
     /// @return The deterministic proxy address.
-    function getAddress(bytes32 salt, address admin, bytes calldata data) external view returns (address) {
+    function getAddress(
+        bytes32 salt,
+        address proxyAdmin,
+        address stablecoinAdmin,
+        uint48 adminDelay,
+        string calldata name,
+        string calldata symbol,
+        uint8 tokenDecimals,
+        Stablecoin.InitialRoles calldata roles
+    ) external view returns (address) {
+        bytes memory data = abi.encodeCall(
+            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles)
+        );
         bytes32 bytecodeHash = keccak256(
             abi.encodePacked(
-                type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, admin, data)
+                type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, proxyAdmin, data)
             )
         );
         return Create2.computeAddress(salt, bytecodeHash);

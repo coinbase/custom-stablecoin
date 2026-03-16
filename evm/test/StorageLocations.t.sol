@@ -27,8 +27,8 @@ contract StorageLocationsTest is Test {
     }
 
     function test_FactoryStorageLocation() public pure {
-        bytes32 expected = 0x2f479ea380745b703f8a394ca62a27f1007b7f21f9ec66b12e43f39167f1b900;
-        bytes32 computed = _erc7201Slot("coinbase.storage.OverrideableBeaconProxyFactory");
+        bytes32 expected = 0x0359e5965fc60a4d7c47813a3cae31d4fea873da7c55a52a52894a5078215f00;
+        bytes32 computed = _erc7201Slot("coinbase.storage.StablecoinFactory");
         assertEq(computed, expected, "FactoryStorage slot mismatch");
     }
 
