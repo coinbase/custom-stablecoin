@@ -14,6 +14,8 @@ library MetadataStorage {
     struct Layout {
         /// @dev The number of decimals for the token.
         uint8 decimals;
+        /// @dev Whether decimals has been set (guards against re-initialization).
+        bool decimalsSet;
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
@@ -30,16 +32,22 @@ library MetadataStorage {
     /// @param decimals The invalid decimals value provided.
     error DecimalsOutOfBounds(uint8 decimals);
 
+    /// @notice Thrown when decimals has already been set and cannot be changed.
+    error DecimalsAlreadySet();
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Sets the token's decimal places.
+    /// @notice Sets the token's decimal places (one-time only).
     ///
     /// @param value The number of decimals; must not exceed `MAX_DECIMALS`.
     function setDecimals(uint8 value) internal {
+        Layout storage $ = layout();
+        if ($.decimalsSet) revert DecimalsAlreadySet();
         if (value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
-        layout().decimals = value;
+        $.decimals = value;
+        $.decimalsSet = true;
     }
 
     /// @notice Returns the token's decimal places.
