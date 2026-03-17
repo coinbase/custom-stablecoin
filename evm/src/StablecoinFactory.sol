@@ -66,7 +66,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /*                     EXTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Initializes the factory with an admin, delay, and beacon address.
+    /// @notice Initializes the factory with an admin, delay, beacon, and deployer.
     ///
     /// @param admin      Initial default admin (two-step transfer with delay).
     /// @param adminDelay Delay (in seconds) for admin transfer proposals.
@@ -74,7 +74,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param deployer   Address that can deploy new {Stablecoin} instances.
     function initialize(address admin, uint48 adminDelay, address beacon_, address deployer) external initializer {
         if (beacon_ == address(0)) revert BeaconNotSet();
-        __AccessControlDefaultAdminRules_init(adminDelay, admin);
+        __AccessControlDefaultAdminRules_init({initialDelay: adminDelay, initialDefaultAdmin: admin});
         _getFactoryStorage().beacon = beacon_;
         _grantRole({role: DEPLOYER_ROLE, account: deployer});
     }
@@ -98,7 +98,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     {
         stablecoin =
             Create2.deploy({amount: 0, salt: salt, bytecode: _bytecode(name, symbol, decimals, stablecoinAdmin)});
-        emit StablecoinDeployed(stablecoin);
+        emit StablecoinDeployed({stablecoin: stablecoin});
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given
@@ -110,14 +110,14 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param stablecoinAdmin The initial default admin of the Stablecoin.
     /// @param salt          The CREATE2 salt.
     ///
-    /// @return stablecoin The deterministic stablecoin address.
+    /// @return The deterministic stablecoin address.
     function computeAddress(
         string calldata name,
         string calldata symbol,
         uint8 decimals,
         address stablecoinAdmin,
         bytes32 salt
-    ) external view returns (address stablecoin) {
+    ) external view returns (address) {
         return Create2.computeAddress(salt, keccak256(_bytecode(name, symbol, decimals, stablecoinAdmin)));
     }
 

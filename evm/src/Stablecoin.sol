@@ -16,9 +16,9 @@ import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
-import {Sanctionable} from "./lib/Sanctionable.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
 import {MintRateLimit} from "./lib/MintRateLimit.sol";
+import {Sanctionable} from "./lib/Sanctionable.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
@@ -128,8 +128,8 @@ contract Stablecoin is
     /// @param limit    New maximum mint capacity.
     /// @param interval Replenishment interval in seconds.
     function configureMinter(address minter, uint256 limit, uint256 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
-        _checkRole(MINT_ROLE, minter);
-        _configureMinter(minter, limit, interval);
+        _checkRole({role: MINT_ROLE, account: minter});
+        _configureMinter({minter: minter, limit: limit, interval: interval});
     }
 
     /// @notice Updates the sanction status for `account`.
@@ -137,7 +137,7 @@ contract Stablecoin is
     /// @param account    Address to update.
     /// @param sanctioned Whether the account should be sanctioned.
     function updateSanctionStatus(address account, bool sanctioned) external onlyRole(SANCTION_ROLE) {
-        _updateSanctionStatus(account, sanctioned);
+        _updateSanctionStatus({account: account, sanctioned: sanctioned});
     }
 
     /// @notice Pauses all token transfers.
