@@ -91,6 +91,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
     /// @param roles         Default role assignments for each operational role.
+    /// @param contractURI   Optional contract-level metadata URI (ERC-7572). Pass empty string to skip.
     ///
     /// @return The address of the newly deployed proxy.
     function deploy(
@@ -100,10 +101,11 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         string calldata name,
         string calldata symbol,
         uint8 tokenDecimals,
-        Stablecoin.InitialRoles calldata roles
+        Stablecoin.InitialRoles calldata roles,
+        string calldata contractURI
     ) external onlyRole(DEPLOYER_ROLE) returns (address) {
         bytes memory data = abi.encodeCall(
-            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles)
+            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles, contractURI)
         );
         address proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, data));
         emit ProxyDeployed({proxy: proxy, admin: stablecoinAdmin, salt: salt});
@@ -120,6 +122,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
     /// @param roles         Default role assignments for each operational role.
+    /// @param contractURI   Optional contract-level metadata URI (ERC-7572). Pass empty string to skip.
     ///
     /// @return The deterministic proxy address.
     function getAddress(
@@ -129,10 +132,11 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         string calldata name,
         string calldata symbol,
         uint8 tokenDecimals,
-        Stablecoin.InitialRoles calldata roles
+        Stablecoin.InitialRoles calldata roles,
+        string calldata contractURI
     ) external view returns (address) {
         bytes memory data = abi.encodeCall(
-            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles)
+            Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles, contractURI)
         );
         bytes32 bytecodeHash = keccak256(
             abi.encodePacked(type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, data))

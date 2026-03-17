@@ -35,6 +35,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
+///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
 contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
@@ -51,6 +52,7 @@ contract Stablecoin is
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
+    bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
     uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
@@ -62,6 +64,7 @@ contract Stablecoin is
         address burner;
         address pauser;
         address blacklister;
+        address metadata;
     }
 
     /// @notice Emitted when tokens are minted.
@@ -111,13 +114,15 @@ contract Stablecoin is
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
     /// @param roles         Default role assignments for each operational role.
+    /// @param contractURI_  Optional contract-level metadata URI (ERC-7572). Pass empty string to skip.
     function initialize(
         address admin,
         uint48 adminDelay,
         string memory name,
         string memory symbol,
         uint8 tokenDecimals,
-        InitialRoles memory roles
+        InitialRoles memory roles,
+        string memory contractURI_
     ) external initializer {
         _setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
@@ -129,6 +134,10 @@ contract Stablecoin is
         _grantRole({role: BURN_ROLE, account: roles.burner});
         _grantRole({role: PAUSE_ROLE, account: roles.pauser});
         _grantRole({role: BLACKLIST_ROLE, account: roles.blacklister});
+        _grantRole({role: METADATA_ROLE, account: roles.metadata});
+        if (bytes(contractURI_).length > 0) {
+            _setContractURI(contractURI_);
+        }
     }
 
     /// @notice Mints `amount` tokens to `to`.
@@ -186,6 +195,13 @@ contract Stablecoin is
     /// @param account Address to unblacklist.
     function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
         _unBlacklist(account);
+    }
+
+    /// @notice Updates the contract-level metadata URI (ERC-7572).
+    ///
+    /// @param newContractURI The new metadata URI.
+    function setContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
+        _setContractURI(newContractURI);
     }
 
     /// @notice Sets a direct implementation for the proxy, opting out of the beacon.

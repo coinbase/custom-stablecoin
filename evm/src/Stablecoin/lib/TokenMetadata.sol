@@ -16,6 +16,8 @@ abstract contract TokenMetadata {
         uint8 decimals;
         /// @dev Whether decimals has been set (guards against re-initialization).
         bool decimalsSet;
+        /// @dev The contract-level metadata URI (ERC-7572).
+        string contractURI;
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
@@ -25,8 +27,11 @@ abstract contract TokenMetadata {
     uint8 internal constant MAX_DECIMALS = 18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                           ERRORS                           */
+    /*                      EVENTS / ERRORS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Emitted when the contract-level metadata URI is updated (ERC-7572).
+    event ContractURIUpdated();
 
     /// @notice Thrown when the provided decimals value exceeds `MAX_DECIMALS`.
     ///
@@ -40,6 +45,13 @@ abstract contract TokenMetadata {
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @notice Returns the contract-level metadata URI (ERC-7572).
+    ///
+    /// @return The metadata URI string.
+    function contractURI() public view virtual returns (string memory) {
+        return _getMetadataLayout().contractURI;
+    }
+
     /// @notice Returns the number of decimals used for token amounts.
     ///
     /// @return The number of decimals.
@@ -50,6 +62,14 @@ abstract contract TokenMetadata {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Sets the contract-level metadata URI (ERC-7572).
+    ///
+    /// @param newContractURI The new metadata URI.
+    function _setContractURI(string memory newContractURI) internal {
+        _getMetadataLayout().contractURI = newContractURI;
+        emit ContractURIUpdated();
+    }
 
     /// @notice Sets the token's decimal places (one-time only).
     ///
