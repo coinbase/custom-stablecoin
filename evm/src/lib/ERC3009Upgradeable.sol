@@ -19,9 +19,9 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
 
     /// @notice Storage layout for ERC-3009 authorization nonces.
     /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.ERC3009
-    struct Erc3009Layout {
+    struct ERC3009Layout {
         /// @dev Maps each authorizer to their nonce usage status.
-        mapping(address authorizer => mapping(bytes32 nonce => bool used)) authorizationStates;
+        mapping(address authorizer => mapping(bytes32 nonce => bool used)) authorizationState;
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.ERC3009")) - 1)) & ~bytes32(uint256(0xff))
@@ -114,16 +114,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 r,
         bytes32 s
     ) external {
-        _transferWithAuthorization({
-            typehash: TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
-            from: from,
-            to: to,
-            value: value,
-            validAfter: validAfter,
-            validBefore: validBefore,
-            nonce: nonce,
-            signature: abi.encodePacked(r, s, v)
-        });
+        transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, abi.encodePacked(r, s, v));
     }
 
     /// @notice Executes a transfer from `from` to `to` where only `to` may submit the transaction.
@@ -151,17 +142,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 r,
         bytes32 s
     ) external {
-        if (msg.sender != to) revert CallerMustBePayee({caller: msg.sender, payee: to});
-        _transferWithAuthorization({
-            typehash: RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
-            from: from,
-            to: to,
-            value: value,
-            validAfter: validAfter,
-            validBefore: validBefore,
-            nonce: nonce,
-            signature: abi.encodePacked(r, s, v)
-        });
+        receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce, abi.encodePacked(r, s, v));
     }
 
     /// @notice Cancels a previously unused authorization nonce.
@@ -174,7 +155,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param r          ECDSA signature component.
     /// @param s          ECDSA signature component.
     function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
-        _cancelAuthorization({authorizer: authorizer, nonce: nonce, signature: abi.encodePacked(r, s, v)});
+        cancelAuthorization(authorizer, nonce, abi.encodePacked(r, s, v));
     }
 
     /// @notice Executes a transfer from `from` to `to` using a signed authorization.
@@ -199,7 +180,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         uint256 validBefore,
         bytes32 nonce,
         bytes memory signature
-    ) external {
+    ) public {
         _transferWithAuthorization({
             typehash: TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
             from: from,
@@ -233,7 +214,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         uint256 validBefore,
         bytes32 nonce,
         bytes memory signature
-    ) external {
+    ) public {
         if (msg.sender != to) revert CallerMustBePayee({caller: msg.sender, payee: to});
         _transferWithAuthorization({
             typehash: RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
@@ -256,8 +237,10 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param authorizer The address that originally signed the authorization.
     /// @param nonce      The nonce to cancel.
     /// @param signature  Packed signature over the EIP-712 cancel authorization struct.
-    function cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) external {
-        _cancelAuthorization({authorizer: authorizer, nonce: nonce, signature: signature});
+    function cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) public {
+        bytes32 structHash = keccak256(abi.encode(CANCEL_AUTHORIZATION_TYPEHASH, authorizer, nonce));
+        _consumeAuthorization(authorizer, nonce, structHash, signature);
+        emit AuthorizationCanceled(authorizer, nonce);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -271,26 +254,12 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     ///
     /// @return True if the nonce has been used or canceled.
     function authorizationState(address authorizer, bytes32 nonce) public view virtual returns (bool) {
-        return _getErc3009Layout().authorizationStates[authorizer][nonce];
+        return _getERC3009Layout().authorizationState[authorizer][nonce];
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     PRIVATE FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Cancels a previously unused authorization nonce.
-    ///
-    /// @param authorizer The address that originally signed the authorization.
-    /// @param nonce      The nonce to cancel.
-    /// @param signature  Packed signature over the EIP-712 cancel authorization struct.
-    function _cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) private {
-        // Validate signature over authorization
-        bytes32 structHash = keccak256(abi.encode(CANCEL_AUTHORIZATION_TYPEHASH, authorizer, nonce));
-        _requireValidSignature({authorizer: authorizer, structHash: structHash, signature: signature});
-
-        // Consume authorization
-        _consumeAuthorization({authorizer: authorizer, nonce: nonce, isCancel: true});
-    }
 
     /// @notice Validates and executes a signed transfer authorization.
     ///
@@ -320,12 +289,10 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         // Authorizations must be used before `validBefore`
         if (timestamp >= validBefore) revert AuthorizationExpired({validBefore: validBefore});
 
-        // Validate signature over authorization
+        // Validate authorization signature and nonce
         bytes32 structHash = keccak256(abi.encode(typehash, from, to, value, validAfter, validBefore, nonce));
-        _requireValidSignature({authorizer: from, structHash: structHash, signature: signature});
-
-        // Consume authorization
-        _consumeAuthorization({authorizer: from, nonce: nonce, isCancel: false});
+        _consumeAuthorization(from, nonce, structHash, signature);
+        emit AuthorizationUsed(from, nonce);
 
         // Transfer tokens
         _transfer(from, to, value);
@@ -335,41 +302,26 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     ///
     /// @param authorizer The authorizer address.
     /// @param nonce      The nonce to check.
-    function _consumeAuthorization(address authorizer, bytes32 nonce, bool isCancel) private {
-        // Check authorization not yet consumed
-        if (authorizationState({authorizer: authorizer, nonce: nonce})) {
-            revert AuthorizationAlreadyUsed({authorizer: authorizer, nonce: nonce});
-        }
+    function _consumeAuthorization(address authorizer, bytes32 nonce, bytes32 structHash, bytes memory signature)
+        private
+    {
+        ERC3009Layout storage $ = _getERC3009Layout();
 
-        // Mark authorization as consumed
-        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
-
-        // Emit event
-        if (isCancel) {
-            emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
-        } else {
-            emit AuthorizationUsed({authorizer: authorizer, nonce: nonce});
-        }
-    }
-
-    /// @notice Validates a signature against the authorizer using `SignatureChecker`.
-    ///
-    /// @dev Supports both standard 65-byte ECDSA signatures from EOAs and ERC-1271 contract
-    /// wallet signatures. The `(v, r, s)` external overloads pack to `abi.encodePacked(r, s, v)`
-    /// before delegating here.
-    ///
-    /// @param authorizer The expected signer.
-    /// @param structHash The EIP-712 struct hash.
-    /// @param signature  The packed signature to validate.
-    function _requireValidSignature(address authorizer, bytes32 structHash, bytes memory signature) private view {
+        // Validate signature over authorization
         bytes32 digest = _hashTypedDataV4(structHash);
         if (!SignatureChecker.isValidSignatureNow(authorizer, digest, signature)) revert InvalidAuthorization();
+
+        // Check authorization not yet consumed
+        if ($.authorizationState[authorizer][nonce]) revert AuthorizationAlreadyUsed(authorizer, nonce);
+
+        // Mark authorization as consumed
+        $.authorizationState[authorizer][nonce] = true;
     }
 
     /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
     ///
     /// @return $ Storage pointer to the layout struct.
-    function _getErc3009Layout() private pure returns (Erc3009Layout storage $) {
+    function _getERC3009Layout() private pure returns (ERC3009Layout storage $) {
         assembly {
             $.slot := ERC3009_STORAGE_LOCATION
         }
