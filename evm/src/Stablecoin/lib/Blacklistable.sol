@@ -10,15 +10,15 @@ abstract contract Blacklistable {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for the blacklist.
-    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.Blacklist
+    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.Blacklist
     struct BlacklistLayout {
         /// @dev Maps each account address to its blacklist status.
         mapping(address account => bool isBlacklisted) blacklisted;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Blacklist")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Blacklist")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant BLACKLIST_STORAGE_LOCATION =
-        0xaa42287b5df5a176a661599ae27fcd3a6641452f1e83e14656b2ec30bf606600;
+        0x9b498cdae840f81fb381d9b0d2886f7cc4fa4aea185af7bea0ce66283831de00;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */

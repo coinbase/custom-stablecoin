@@ -17,6 +17,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
 import {Blacklistable} from "./lib/Blacklistable.sol";
+import {EIP3009Upgradeable} from "./lib/EIP3009Upgradeable.sol";
 import {MintAllowance} from "./lib/MintAllowance.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
@@ -39,6 +40,7 @@ contract Stablecoin is
     ERC20Upgradeable,
     ERC20PausableUpgradeable,
     ERC20PermitUpgradeable,
+    EIP3009Upgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
     Blacklistable,
     MintAllowance,

@@ -10,7 +10,7 @@ abstract contract TokenMetadata {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for token metadata.
-    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.Metadata
+    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.Metadata
     struct MetadataLayout {
         /// @dev The number of decimals for the token.
         uint8 decimals;
@@ -18,9 +18,9 @@ abstract contract TokenMetadata {
         bool decimalsSet;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant METADATA_STORAGE_LOCATION =
-        0xeba5b3977d3b9de82516e2e616f881364b5bda38308f816dd84f2ec3c1947200;
+        0xa3459737885856abeeb2a475f81a26ad8d8ccc56bd90faa293afd170849e1600;
 
     uint8 internal constant MAX_DECIMALS = 18;
 
