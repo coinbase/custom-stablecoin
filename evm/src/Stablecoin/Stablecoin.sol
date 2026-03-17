@@ -80,10 +80,7 @@ contract Stablecoin is
     /// @param amount The number of tokens burned.
     event Burned(address indexed burner, uint256 amount);
 
-    /// @notice Emitted when the implementation override is cleared, returning to beacon behavior.
-    event ImplementationOverrideCleared();
-
-    /// @notice Thrown when the provided implementation address has no code.
+    /// @notice Thrown when the provided implementation address has no code or is the zero address.
     ///
     /// @param implementation The invalid implementation address.
     error InvalidImplementation(address implementation);
@@ -204,31 +201,28 @@ contract Stablecoin is
         _setContractURI(newContractURI);
     }
 
-    /// @notice Sets a direct implementation for the proxy, opting out of the beacon.
+    /// @notice Permanently opts this proxy out of the shared beacon by writing a direct
+    /// implementation address into the ERC-1967 implementation slot.
     ///
-    /// @dev When called via delegatecall through an {OverrideableBeaconProxy}, this writes
-    /// to the proxy's ERC-1967 implementation slot. On the next call, the proxy's
-    /// `_implementation()` will return this address directly, skipping the beacon.
-    /// Pass `address(0)` to clear the override and return to beacon behavior.
+    /// @dev After this call, the proxy's `_implementation()` returns `newImplementation`
+    /// directly instead of querying the beacon. This is a one-way operation — once set,
+    /// the proxy no longer follows beacon upgrades. The admin can still call this again
+    /// to point at a different implementation, but cannot return to beacon behavior.
     ///
-    /// @param implementation The implementation address to set, or `address(0)` to clear.
-    function setImplementationOverride(address implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (implementation != address(0) && implementation.code.length == 0) {
-            revert InvalidImplementation({implementation: implementation});
-        }
-        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = implementation;
-        if (implementation != address(0)) {
-            emit IERC1967.Upgraded(implementation);
-        } else {
-            emit ImplementationOverrideCleared();
-        }
-    }
+    /// @param newImplementation The implementation address to delegate to. Must be a deployed
+    ///        contract (non-zero address with code).
+    function exitBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // Reject the zero address — exiting the beacon is one-way, clearing is not supported.
+        if (newImplementation == address(0)) revert InvalidImplementation({implementation: newImplementation});
 
-    /// @notice Returns the current implementation override, or `address(0)` if using the beacon.
-    ///
-    /// @return The override implementation address.
-    function implementationOverride() external view returns (address) {
-        return ERC1967Utils.getImplementation();
+        // Ensure the target is a deployed contract, not an EOA or empty address.
+        if (newImplementation.code.length == 0) revert InvalidImplementation({implementation: newImplementation});
+
+        // Write directly to the ERC-1967 implementation slot. Once set, the proxy's
+        // _implementation() will return this address, bypassing the beacon entirely.
+        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = newImplementation;
+
+        emit IERC1967.Upgraded(newImplementation);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -239,7 +233,7 @@ contract Stablecoin is
     ///
     /// @return The number of decimals.
     function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
-        return super.decimals();
+        return TokenMetadata.decimals();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

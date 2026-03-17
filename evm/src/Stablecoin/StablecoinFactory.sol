@@ -84,6 +84,9 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
 
     /// @notice Deploys a new {Stablecoin} behind an {OverrideableBeaconProxy} using CREATE2.
     ///
+    /// @dev Uses `Create2.deploy` so the factory's address is part of the CREATE2 derivation,
+    /// ensuring only this factory can deploy proxies to the predicted addresses.
+    ///
     /// @param salt          Salt for CREATE2; determines the proxy address.
     /// @param stablecoinAdmin The initial default admin of the Stablecoin.
     /// @param adminDelay    Delay (in seconds) for Stablecoin admin transfer proposals.
@@ -107,7 +110,9 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         bytes memory data = abi.encodeCall(
             Stablecoin.initialize, (stablecoinAdmin, adminDelay, name, symbol, tokenDecimals, roles, contractURI)
         );
-        address proxy = address(new OverrideableBeaconProxy{salt: salt}(_getFactoryStorage().beacon, data));
+        bytes memory bytecode =
+            abi.encodePacked(type(OverrideableBeaconProxy).creationCode, abi.encode(_getFactoryStorage().beacon, data));
+        address proxy = Create2.deploy({amount: 0, salt: salt, bytecode: bytecode});
         emit ProxyDeployed({proxy: proxy, admin: stablecoinAdmin, salt: salt});
         return proxy;
     }

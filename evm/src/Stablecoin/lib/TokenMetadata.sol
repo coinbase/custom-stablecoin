@@ -12,10 +12,8 @@ abstract contract TokenMetadata {
     /// @notice Storage layout for token metadata.
     /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.Metadata
     struct MetadataLayout {
-        /// @dev The number of decimals for the token.
+        /// @dev The number of decimals for the token (0 means unset).
         uint8 decimals;
-        /// @dev Whether decimals has been set (guards against re-initialization).
-        bool decimalsSet;
         /// @dev The contract-level metadata URI (ERC-7572).
         string contractURI;
     }
@@ -24,6 +22,7 @@ abstract contract TokenMetadata {
     bytes32 private constant METADATA_STORAGE_LOCATION =
         0xa3459737885856abeeb2a475f81a26ad8d8ccc56bd90faa293afd170849e1600;
 
+    uint8 internal constant MIN_DECIMALS = 2;
     uint8 internal constant MAX_DECIMALS = 18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -73,13 +72,13 @@ abstract contract TokenMetadata {
 
     /// @notice Sets the token's decimal places (one-time only).
     ///
-    /// @param value The number of decimals; must not exceed `MAX_DECIMALS`.
+    /// @param value The number of decimals; must be between `MIN_DECIMALS` and `MAX_DECIMALS` inclusive.
     function _setDecimals(uint8 value) internal {
         MetadataLayout storage $ = _getMetadataLayout();
-        if ($.decimalsSet) revert DecimalsAlreadySet();
+        if ($.decimals != 0) revert DecimalsAlreadySet();
+        if (value < MIN_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
         if (value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
         $.decimals = value;
-        $.decimalsSet = true;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
