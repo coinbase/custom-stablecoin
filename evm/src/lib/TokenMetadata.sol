@@ -44,13 +44,6 @@ abstract contract TokenMetadata {
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Returns the contract-level metadata URI (ERC-7572).
-    ///
-    /// @return The metadata URI string.
-    function contractURI() public view virtual returns (string memory) {
-        return _getMetadataLayout().contractURI;
-    }
-
     /// @notice Returns the number of decimals used for token amounts.
     ///
     /// @return The number of decimals.
@@ -58,17 +51,16 @@ abstract contract TokenMetadata {
         return _getMetadataLayout().decimals;
     }
 
+    /// @notice Returns the contract-level metadata URI (ERC-7572).
+    ///
+    /// @return The metadata URI string.
+    function contractURI() public view virtual returns (string memory) {
+        return _getMetadataLayout().contractURI;
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Sets the contract-level metadata URI (ERC-7572).
-    ///
-    /// @param newContractURI The new metadata URI.
-    function _setContractURI(string memory newContractURI) internal {
-        _getMetadataLayout().contractURI = newContractURI;
-        emit ContractURIUpdated();
-    }
 
     /// @notice Sets the token's decimal places (one-time only).
     ///
@@ -78,6 +70,14 @@ abstract contract TokenMetadata {
         if ($.decimals != 0) revert DecimalsAlreadyInitialized();
         if (value < MIN_DECIMALS || value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
         $.decimals = value;
+    }
+
+    /// @notice Sets the contract-level metadata URI (ERC-7572).
+    ///
+    /// @param newContractURI The new metadata URI.
+    function _updateContractURI(string memory newContractURI) internal {
+        _getMetadataLayout().contractURI = newContractURI;
+        emit ContractURIUpdated();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

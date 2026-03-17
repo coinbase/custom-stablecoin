@@ -46,12 +46,9 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /*                      EVENTS / ERRORS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Emitted when a new proxy is deployed.
-    ///
-    /// @param proxy  The address of the deployed proxy.
-    /// @param admin  The proxy admin address.
-    /// @param salt   The CREATE2 salt used for deployment.
-    event ProxyDeployed(address indexed proxy, address indexed admin, bytes32 salt);
+    /// @notice Emitted when a new stablecoin is deployed.
+    /// @param stablecoin  The address of the new stablecoin.
+    event StablecoinDeployed(address indexed stablecoin);
 
     /// @notice Thrown when the factory is initialized without a beacon address.
     error BeaconNotSet();
@@ -65,11 +62,6 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         _disableInitializers();
     }
 
-    struct InitialRole {
-        bytes32 role;
-        address account;
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     EXTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -80,11 +72,11 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param deployer   Address that can deploy new {Stablecoin} instances.
     /// @param adminDelay Delay (in seconds) for admin transfer proposals.
     /// @param beacon_    Beacon address; set once and cannot be changed.
-    function initialize(address admin, address deployer, uint48 adminDelay, address beacon_) external initializer {
+    function initialize(address admin, uint48 adminDelay, address beacon_, address deployer) external initializer {
         if (beacon_ == address(0)) revert BeaconNotSet();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole({role: DEPLOYER_ROLE, account: deployer});
         _getFactoryStorage().beacon = beacon_;
+        _grantRole({role: DEPLOYER_ROLE, account: deployer});
     }
 
     /// @notice Deploys a new {Stablecoin} behind an {OverrideableBeaconProxy} using CREATE2.
@@ -98,17 +90,16 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param stablecoinAdmin The initial default admin of the Stablecoin.
     /// @param salt          Salt for CREATE2; determines the proxy address.
     ///
-    /// @return The address of the newly deployed proxy.
+    /// @return stablecoin The address of the newly deployed stablecoin.
     function deploy(string calldata name, string calldata symbol, uint8 decimals, address stablecoinAdmin, bytes32 salt)
         external
         onlyRole(DEPLOYER_ROLE)
-        returns (address)
+        returns (address stablecoin)
     {
         bytes memory data = abi.encodeCall(Stablecoin.initialize, (name, symbol, decimals, stablecoinAdmin));
         bytes memory bytecode = abi.encodePacked(type(OverrideableBeaconProxy).creationCode, abi.encode(beacon(), data));
-        address proxy = Create2.deploy({amount: 0, salt: salt, bytecode: bytecode});
-        emit ProxyDeployed({proxy: proxy, admin: stablecoinAdmin, salt: salt});
-        return proxy;
+        stablecoin = Create2.deploy({amount: 0, salt: salt, bytecode: bytecode});
+        emit StablecoinDeployed(stablecoin);
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given
@@ -120,14 +111,14 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param symbol        Token symbol.
     /// @param decimals Token decimal places (max 18).
     ///
-    /// @return The deterministic proxy address.
+    /// @return stablecoin The deterministic stablecoin address.
     function computeAddress(
         string calldata name,
         string calldata symbol,
         uint8 decimals,
         address stablecoinAdmin,
         bytes32 salt
-    ) external view returns (address) {
+    ) external view returns (address stablecoin) {
         bytes memory data = abi.encodeCall(Stablecoin.initialize, (name, symbol, decimals, stablecoinAdmin));
         bytes memory bytecode = abi.encodePacked(type(OverrideableBeaconProxy).creationCode, abi.encode(beacon(), data));
         return Create2.computeAddress(salt, keccak256(bytecode));

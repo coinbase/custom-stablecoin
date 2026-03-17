@@ -162,8 +162,8 @@ contract Stablecoin is
     /// @notice Updates the contract-level metadata URI (ERC-7572).
     ///
     /// @param newContractURI The new metadata URI.
-    function setContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
-        _setContractURI(newContractURI);
+    function updateContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
+        _updateContractURI(newContractURI);
     }
 
     /// @notice Permanently opts this proxy out of the shared beacon by writing a direct
