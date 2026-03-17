@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
@@ -187,6 +188,95 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
     }
 
+    /// @notice Executes a transfer from `from` to `to` using a signed authorization.
+    ///
+    /// @dev Anyone may submit this transaction. Validates the authorization using
+    /// `SignatureChecker.isValidSignatureNow`, which supports both 65-byte ECDSA signatures
+    /// from EOAs and ERC-1271 signatures from smart contract wallets.
+    /// The transfer goes through `_transfer` -> `_update`, so blacklist and pause checks apply.
+    ///
+    /// @param from        The payer (signer of the authorization).
+    /// @param to          The payee (recipient of the transfer).
+    /// @param value       The amount to transfer.
+    /// @param validAfter  The earliest unix timestamp at which the authorization is valid.
+    /// @param validBefore The latest unix timestamp at which the authorization is valid.
+    /// @param nonce       A unique random 32-byte nonce.
+    /// @param signature   Packed signature over the EIP-712 authorization struct.
+    function transferWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        bytes memory signature
+    ) external {
+        _transferWithAuthorizationBytes({
+            typehash: TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
+            from: from,
+            to: to,
+            value: value,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: nonce,
+            signature: signature
+        });
+    }
+
+    /// @notice Executes a transfer from `from` to `to` where only `to` may submit the transaction.
+    ///
+    /// @dev This prevents front-running by ensuring only the intended recipient can execute the transfer.
+    /// Validates the authorization using `SignatureChecker.isValidSignatureNow`, which supports both
+    /// 65-byte ECDSA signatures from EOAs and ERC-1271 signatures from smart contract wallets.
+    ///
+    /// @param from        The payer (signer of the authorization).
+    /// @param to          The payee (recipient and required msg.sender).
+    /// @param value       The amount to transfer.
+    /// @param validAfter  The earliest unix timestamp at which the authorization is valid.
+    /// @param validBefore The latest unix timestamp at which the authorization is valid.
+    /// @param nonce       A unique random 32-byte nonce.
+    /// @param signature   Packed signature over the EIP-712 authorization struct.
+    function receiveWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        bytes memory signature
+    ) external {
+        if (msg.sender != to) revert CallerMustBePayee({caller: msg.sender, payee: to});
+        _transferWithAuthorizationBytes({
+            typehash: RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
+            from: from,
+            to: to,
+            value: value,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: nonce,
+            signature: signature
+        });
+    }
+
+    /// @notice Cancels a previously unused authorization nonce.
+    ///
+    /// @dev The authorizer signs a `CancelAuthorization` message to void a nonce before it is used.
+    /// Validates using `SignatureChecker.isValidSignatureNow`, which supports both 65-byte ECDSA
+    /// signatures from EOAs and ERC-1271 signatures from smart contract wallets.
+    ///
+    /// @param authorizer The address that originally signed the authorization.
+    /// @param nonce      The nonce to cancel.
+    /// @param signature  Packed signature over the EIP-712 cancel authorization struct.
+    function cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) external {
+        _requireUnusedAuthorization({authorizer: authorizer, nonce: nonce});
+
+        bytes32 structHash = keccak256(abi.encode(CANCEL_AUTHORIZATION_TYPEHASH, authorizer, nonce));
+        _requireValidSignatureBytes({authorizer: authorizer, structHash: structHash, signature: signature});
+
+        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
+        emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -286,6 +376,51 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(digest, v, r, s);
         if (signer != authorizer) revert InvalidAuthorization();
+    }
+
+    /// @notice Validates and executes a signed transfer authorization using a `bytes` signature.
+    ///
+    /// @param typehash    The EIP-712 typehash for the authorization type.
+    /// @param from        The payer (signer of the authorization).
+    /// @param to          The payee (recipient of the transfer).
+    /// @param value       The amount to transfer.
+    /// @param validAfter  The earliest unix timestamp at which the authorization is valid.
+    /// @param validBefore The latest unix timestamp at which the authorization is valid.
+    /// @param nonce       A unique random 32-byte nonce.
+    /// @param signature   Packed signature over the EIP-712 authorization struct.
+    function _transferWithAuthorizationBytes(
+        bytes32 typehash,
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        bytes memory signature
+    ) private {
+        _requireValidAuthorization({authorizer: from, validAfter: validAfter, validBefore: validBefore, nonce: nonce});
+
+        bytes32 structHash = keccak256(abi.encode(typehash, from, to, value, validAfter, validBefore, nonce));
+        _requireValidSignatureBytes({authorizer: from, structHash: structHash, signature: signature});
+
+        _markAuthorizationUsed({authorizer: from, nonce: nonce});
+        _transfer(from, to, value);
+    }
+
+    /// @notice Validates a `bytes` signature against the authorizer using ERC-1271 or ECDSA.
+    ///
+    /// @dev Uses `SignatureChecker.isValidSignatureNow`, which supports both standard 65-byte
+    /// ECDSA signatures from EOAs and ERC-1271 contract wallet signatures.
+    ///
+    /// @param authorizer The expected signer.
+    /// @param structHash The EIP-712 struct hash.
+    /// @param signature  The packed signature to validate.
+    function _requireValidSignatureBytes(address authorizer, bytes32 structHash, bytes memory signature)
+        private
+        view
+    {
+        bytes32 digest = _hashTypedDataV4(structHash);
+        if (!SignatureChecker.isValidSignatureNow(authorizer, digest, signature)) revert InvalidAuthorization();
     }
 
     /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
