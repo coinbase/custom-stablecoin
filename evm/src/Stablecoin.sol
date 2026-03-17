@@ -48,24 +48,11 @@ contract Stablecoin is
     TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
-    bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
     bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
-
-    uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
-    uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
-
-    /// @notice Default role assignments passed to {initialize}.
-    struct InitialRoles {
-        address minter;
-        address mintAllowance;
-        address burner;
-        address pauser;
-        address blacklister;
-        address metadata;
-    }
 
     /// @notice Emitted when tokens are minted.
     ///
@@ -85,11 +72,6 @@ contract Stablecoin is
     /// @param implementation The invalid implementation address.
     error InvalidImplementation(address implementation);
 
-    /// @notice Thrown when a minter address has no configured allowance.
-    ///
-    /// @param minter The unconfigured minter address.
-    error MinterNotConfigured(address minter);
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -105,36 +87,19 @@ contract Stablecoin is
 
     /// @notice Initializes the stablecoin with the given admin, delay, name, symbol, decimals, and role assignments.
     ///
-    /// @param admin         The initial default admin address.
-    /// @param adminDelay    Delay (in seconds) for admin transfer proposals.
     /// @param name          Token name.
     /// @param symbol        Token symbol.
-    /// @param tokenDecimals Token decimal places (max 18).
-    /// @param roles         Default role assignments for each operational role.
-    /// @param contractURI_  Optional contract-level metadata URI (ERC-7572). Pass empty string to skip.
-    function initialize(
-        address admin,
-        uint48 adminDelay,
-        string memory name,
-        string memory symbol,
-        uint8 tokenDecimals,
-        InitialRoles memory roles,
-        string memory contractURI_
-    ) external initializer {
-        _setDecimals({value: tokenDecimals});
+    /// @param decimals_     Token decimal places (max 18).
+    /// @param admin         The initial default admin address.
+    function initialize(string calldata name, string calldata symbol, uint8 decimals_, address admin)
+        external
+        initializer
+    {
         __ERC20_init(name, symbol);
         __ERC20Permit_init(name);
+        _initializeDecimals({value: decimals_});
+        __AccessControlDefaultAdminRules_init({initialDefaultAdmin: admin, initialDelay: 0});
         __ERC20Pausable_init();
-        __AccessControlDefaultAdminRules_init(adminDelay, admin);
-        _grantRole({role: MINT_ALLOWANCE_ROLE, account: roles.mintAllowance});
-        _grantRole({role: MINT_ROLE, account: roles.minter});
-        _grantRole({role: BURN_ROLE, account: roles.burner});
-        _grantRole({role: PAUSE_ROLE, account: roles.pauser});
-        _grantRole({role: BLACKLIST_ROLE, account: roles.blacklister});
-        _grantRole({role: METADATA_ROLE, account: roles.metadata});
-        if (bytes(contractURI_).length > 0) {
-            _setContractURI(contractURI_);
-        }
     }
 
     /// @notice Mints `amount` tokens to `to`.
@@ -147,21 +112,6 @@ contract Stablecoin is
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
-    /// @notice Updates an existing minter's rate-limit configuration.
-    ///
-    /// @dev Cannot add or remove minters; use role management for that.
-    ///
-    /// @param minter       Minter address to update.
-    /// @param maxAllowance New maximum allowance per interval.
-    /// @param interval     Replenishment interval in seconds.
-    function updateMinterAllowance(address minter, uint256 maxAllowance, uint256 interval)
-        external
-        onlyRole(MINT_ALLOWANCE_ROLE)
-    {
-        if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured({minter: minter});
-        _configureMinter(minter, maxAllowance, interval);
-    }
-
     /// @notice Burns `amount` tokens from the caller's balance.
     ///
     /// @param amount Number of tokens to burn.
@@ -170,14 +120,19 @@ contract Stablecoin is
         emit Burned({burner: msg.sender, amount: amount});
     }
 
-    /// @notice Pauses all token transfers.
-    function pause() external onlyRole(PAUSE_ROLE) {
-        _pause();
-    }
-
-    /// @notice Unpauses token transfers.
-    function unpause() external onlyRole(PAUSE_ROLE) {
-        _unpause();
+    /// @notice Updates an existing minter's rate-limit configuration.
+    ///
+    /// @dev Cannot add or remove minters; use role management for that.
+    ///
+    /// @param minter       Minter address to update.
+    /// @param maxAllowance New maximum allowance per interval.
+    /// @param interval     Replenishment interval in seconds.
+    function configureMinter(address minter, uint256 maxAllowance, uint256 interval)
+        external
+        onlyRole(MINT_ALLOWANCE_ROLE)
+    {
+        _checkRole(MINT_ROLE, minter);
+        _configureMinter(minter, maxAllowance, interval);
     }
 
     /// @notice Adds `account` to the blacklist, preventing it from transferring tokens.
@@ -192,6 +147,16 @@ contract Stablecoin is
     /// @param account Address to unblacklist.
     function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
         _unBlacklist(account);
+    }
+
+    /// @notice Pauses all token transfers.
+    function pause() external onlyRole(PAUSE_ROLE) {
+        _pause();
+    }
+
+    /// @notice Unpauses token transfers.
+    function unpause() external onlyRole(PAUSE_ROLE) {
+        _unpause();
     }
 
     /// @notice Updates the contract-level metadata URI (ERC-7572).
@@ -239,21 +204,6 @@ contract Stablecoin is
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Overrides role granting to auto-configure a mint allowance when `MINT_ROLE` is granted.
-    ///
-    /// @param role    The role being granted.
-    /// @param account The account receiving the role.
-    ///
-    /// @return True if the role was newly granted.
-    function _grantRole(bytes32 role, address account) internal override returns (bool) {
-        bool granted = super._grantRole(role, account);
-        if (granted && role == MINT_ROLE) {
-            uint256 allowance = DEFAULT_MINT_ALLOWANCE * 10 ** decimals();
-            _configureMinter({minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL});
-        }
-        return granted;
-    }
 
     /// @notice Overrides role revoking to remove the mint allowance when `MINT_ROLE` is revoked.
     ///

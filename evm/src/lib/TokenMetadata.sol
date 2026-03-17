@@ -38,7 +38,7 @@ abstract contract TokenMetadata {
     error DecimalsOutOfBounds(uint8 decimals);
 
     /// @notice Thrown when decimals has already been set and cannot be changed.
-    error DecimalsAlreadySet();
+    error DecimalsAlreadyInitialized();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      PUBLIC FUNCTIONS                      */
@@ -73,11 +73,10 @@ abstract contract TokenMetadata {
     /// @notice Sets the token's decimal places (one-time only).
     ///
     /// @param value The number of decimals; must be between `MIN_DECIMALS` and `MAX_DECIMALS` inclusive.
-    function _setDecimals(uint8 value) internal {
+    function _initializeDecimals(uint8 value) internal {
         MetadataLayout storage $ = _getMetadataLayout();
-        if ($.decimals != 0) revert DecimalsAlreadySet();
-        if (value < MIN_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
-        if (value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
+        if ($.decimals != 0) revert DecimalsAlreadyInitialized();
+        if (value < MIN_DECIMALS || value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
         $.decimals = value;
     }
 
