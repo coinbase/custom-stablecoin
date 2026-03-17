@@ -16,7 +16,7 @@ import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
-import {Blacklistable} from "./lib/Blacklistable.sol";
+import {Sanctionable} from "./lib/Sanctionable.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
 import {MintRateLimit} from "./lib/MintRateLimit.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
@@ -34,7 +34,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - MINT_RATE_LIMIT_ROLE – can update rate limits for existing minters.
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
-///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
+///   - SANCTION_ROLE – can update sanction status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
 contract Stablecoin is
     Initializable,
@@ -43,14 +43,14 @@ contract Stablecoin is
     ERC20PermitUpgradeable,
     ERC3009Upgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
-    Blacklistable,
+    Sanctionable,
     MintRateLimit,
     TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
-    bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
+    bytes32 public constant SANCTION_ROLE = keccak256("SANCTION_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
@@ -132,18 +132,12 @@ contract Stablecoin is
         _configureMinter(minter, limit, interval);
     }
 
-    /// @notice Adds `account` to the blacklist, preventing it from transferring tokens.
+    /// @notice Updates the sanction status for `account`.
     ///
-    /// @param account Address to blacklist.
-    function blacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        _blacklist(account);
-    }
-
-    /// @notice Removes `account` from the blacklist.
-    ///
-    /// @param account Address to unblacklist.
-    function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        _unBlacklist(account);
+    /// @param account    Address to update.
+    /// @param sanctioned Whether the account should be sanctioned.
+    function updateSanctionStatus(address account, bool sanctioned) external onlyRole(SANCTION_ROLE) {
+        _updateSanctionStatus(account, sanctioned);
     }
 
     /// @notice Pauses all token transfers.
@@ -174,9 +168,6 @@ contract Stablecoin is
     /// @param newImplementation The implementation address to delegate to. Must be a deployed
     ///        contract (non-zero address with code).
     function exitBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // Reject the zero address — exiting the beacon is one-way, clearing is not supported.
-        if (newImplementation == address(0)) revert InvalidImplementation({implementation: newImplementation});
-
         // Ensure the target is a deployed contract, not an EOA or empty address.
         if (newImplementation.code.length == 0) revert InvalidImplementation({implementation: newImplementation});
 
@@ -216,7 +207,7 @@ contract Stablecoin is
         return revoked;
     }
 
-    /// @notice Overrides the ERC-20 transfer hook to enforce blacklist and pause checks.
+    /// @notice Overrides the ERC-20 transfer hook to enforce sanction and pause checks.
     ///
     /// @param from  The sender address.
     /// @param to    The recipient address.
@@ -225,9 +216,9 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlacklisted({account: msg.sender});
-        _requireNotBlacklisted({account: from});
-        _requireNotBlacklisted({account: to});
+        _requireNotSanctioned({account: msg.sender});
+        _requireNotSanctioned({account: from});
+        _requireNotSanctioned({account: to});
         super._update(from, to, value);
     }
 }

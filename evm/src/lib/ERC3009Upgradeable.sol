@@ -92,7 +92,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @notice Executes a transfer from `from` to `to` using a signed authorization.
     ///
     /// @dev Anyone may submit this transaction. The authorization is validated via EIP-712 signature
-    /// recovery. The transfer goes through `_transfer` -> `_update`, so blacklist and pause checks apply.
+    /// recovery. The transfer goes through `_transfer` -> `_update`, so sanction and pause checks apply.
     ///
     /// @param from        The payer (signer of the authorization).
     /// @param to          The payee (recipient of the transfer).
@@ -167,7 +167,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @dev Anyone may submit this transaction. Validates the authorization using
     /// `SignatureChecker.isValidSignatureNow`, which supports both 65-byte ECDSA signatures
     /// from EOAs and ERC-1271 signatures from smart contract wallets.
-    /// The transfer goes through `_transfer` -> `_update`, so blacklist and pause checks apply.
+    /// The transfer goes through `_transfer` -> `_update`, so sanction and pause checks apply.
     ///
     /// @param from        The payer (signer of the authorization).
     /// @param to          The payee (recipient of the transfer).
