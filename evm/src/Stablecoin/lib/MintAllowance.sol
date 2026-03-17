@@ -28,15 +28,15 @@ abstract contract MintAllowance {
     }
 
     /// @notice Storage layout for mint allowances.
-    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.MintAllowance
+    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.MintAllowance
     struct MintAllowanceLayout {
         /// @dev Maps each minter address to its rate-limit configuration.
         mapping(address minter => MinterConfig config) minters;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.MintAllowance")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.MintAllowance")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant MINT_ALLOWANCE_STORAGE_LOCATION =
-        0x32a75239f6b2b5cfaaa5a083b38ae38049a46ac226ace8c1f2cd933deef68500;
+        0xe88ac28a8516a992a51aea3dabb181d8896444f55e0d6937cb1897b3b38da700;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
