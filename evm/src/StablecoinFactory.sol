@@ -8,7 +8,7 @@ import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-import {OverrideableBeaconProxy} from "../OverrideableBeaconProxy.sol";
+import {OverrideableBeaconProxy} from "./OverrideableBeaconProxy.sol";
 import {Stablecoin} from "./Stablecoin.sol";
 
 /// @title StablecoinFactory
