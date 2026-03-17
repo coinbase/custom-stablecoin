@@ -5,14 +5,14 @@ import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/Signa
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-/// @title EIP3009Upgradeable
+/// @title ERC3009Upgradeable
 /// @author Coinbase
 /// @notice ERC-3009 Transfer With Authorization implementation using ERC-7201 namespaced storage.
 ///
 /// @dev Enables meta-transaction transfers via signed EIP-712 authorizations. Uses random 32-byte
 /// nonces (not sequential) to allow multiple concurrent authorizations. Inherits `ERC20Upgradeable`
 /// for `_transfer` and `EIP712Upgradeable` for `_hashTypedDataV4`.
-abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
+abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -284,13 +284,12 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param nonce      The nonce to cancel.
     /// @param signature  Packed signature over the EIP-712 cancel authorization struct.
     function _cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) private {
-        _requireUnusedAuthorization({authorizer: authorizer, nonce: nonce});
-
+        // Validate signature over authorization
         bytes32 structHash = keccak256(abi.encode(CANCEL_AUTHORIZATION_TYPEHASH, authorizer, nonce));
         _requireValidSignature({authorizer: authorizer, structHash: structHash, signature: signature});
 
-        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
-        emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
+        // Consume authorization
+        _consumeAuthorization({authorizer: authorizer, nonce: nonce, isCancel: true});
     }
 
     /// @notice Validates and executes a signed transfer authorization.
@@ -313,46 +312,43 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 nonce,
         bytes memory signature
     ) private {
-        _requireValidAuthorization({authorizer: from, validAfter: validAfter, validBefore: validBefore, nonce: nonce});
+        uint256 timestamp = block.timestamp;
 
+        // Authorizations must be used after `validAfter`
+        if (timestamp <= validAfter) revert AuthorizationNotYetValid({validAfter: validAfter});
+
+        // Authorizations must be used before `validBefore`
+        if (timestamp >= validBefore) revert AuthorizationExpired({validBefore: validBefore});
+
+        // Validate signature over authorization
         bytes32 structHash = keccak256(abi.encode(typehash, from, to, value, validAfter, validBefore, nonce));
         _requireValidSignature({authorizer: from, structHash: structHash, signature: signature});
 
-        _markAuthorizationUsed({authorizer: from, nonce: nonce});
+        // Consume authorization
+        _consumeAuthorization({authorizer: from, nonce: nonce, isCancel: false});
+
+        // Transfer tokens
         _transfer(from, to, value);
-    }
-
-    /// @notice Marks a nonce as used and emits the `AuthorizationUsed` event.
-    ///
-    /// @param authorizer The authorizer address.
-    /// @param nonce      The nonce to mark as used.
-    function _markAuthorizationUsed(address authorizer, bytes32 nonce) private {
-        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
-        emit AuthorizationUsed({authorizer: authorizer, nonce: nonce});
-    }
-
-    /// @notice Validates time window and nonce freshness for an authorization.
-    ///
-    /// @param authorizer  The authorizer address.
-    /// @param validAfter  The earliest valid timestamp.
-    /// @param validBefore The latest valid timestamp.
-    /// @param nonce       The nonce to validate.
-    function _requireValidAuthorization(address authorizer, uint256 validAfter, uint256 validBefore, bytes32 nonce)
-        private
-        view
-    {
-        if (block.timestamp <= validAfter) revert AuthorizationNotYetValid({validAfter: validAfter});
-        if (block.timestamp >= validBefore) revert AuthorizationExpired({validBefore: validBefore});
-        _requireUnusedAuthorization({authorizer: authorizer, nonce: nonce});
     }
 
     /// @notice Reverts if the given nonce has already been used or canceled.
     ///
     /// @param authorizer The authorizer address.
     /// @param nonce      The nonce to check.
-    function _requireUnusedAuthorization(address authorizer, bytes32 nonce) private view {
+    function _consumeAuthorization(address authorizer, bytes32 nonce, bool isCancel) private {
+        // Check authorization not yet consumed
         if (authorizationState({authorizer: authorizer, nonce: nonce})) {
             revert AuthorizationAlreadyUsed({authorizer: authorizer, nonce: nonce});
+        }
+
+        // Mark authorization as consumed
+        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
+
+        // Emit event
+        if (isCancel) {
+            emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
+        } else {
+            emit AuthorizationUsed({authorizer: authorizer, nonce: nonce});
         }
     }
 
