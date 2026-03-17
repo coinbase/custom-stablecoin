@@ -38,18 +38,11 @@ abstract contract TokenMetadata {
     error DecimalsOutOfBounds(uint8 decimals);
 
     /// @notice Thrown when decimals has already been set and cannot be changed.
-    error DecimalsAlreadySet();
+    error DecimalsAlreadyInitialized();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Returns the contract-level metadata URI (ERC-7572).
-    ///
-    /// @return The metadata URI string.
-    function contractURI() public view virtual returns (string memory) {
-        return _getMetadataLayout().contractURI;
-    }
 
     /// @notice Returns the number of decimals used for token amounts.
     ///
@@ -58,27 +51,33 @@ abstract contract TokenMetadata {
         return _getMetadataLayout().decimals;
     }
 
+    /// @notice Returns the contract-level metadata URI (ERC-7572).
+    ///
+    /// @return The metadata URI string.
+    function contractURI() public view virtual returns (string memory) {
+        return _getMetadataLayout().contractURI;
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Sets the contract-level metadata URI (ERC-7572).
-    ///
-    /// @param newContractURI The new metadata URI.
-    function _setContractURI(string memory newContractURI) internal {
-        _getMetadataLayout().contractURI = newContractURI;
-        emit ContractURIUpdated();
-    }
-
     /// @notice Sets the token's decimal places (one-time only).
     ///
     /// @param value The number of decimals; must be between `MIN_DECIMALS` and `MAX_DECIMALS` inclusive.
-    function _setDecimals(uint8 value) internal {
+    function _initializeDecimals(uint8 value) internal {
         MetadataLayout storage $ = _getMetadataLayout();
-        if ($.decimals != 0) revert DecimalsAlreadySet();
-        if (value < MIN_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
-        if (value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
+        if ($.decimals != 0) revert DecimalsAlreadyInitialized();
+        if (value < MIN_DECIMALS || value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});
         $.decimals = value;
+    }
+
+    /// @notice Sets the contract-level metadata URI (ERC-7572).
+    ///
+    /// @param newContractURI The new metadata URI.
+    function _updateContractURI(string memory newContractURI) internal {
+        _getMetadataLayout().contractURI = newContractURI;
+        emit ContractURIUpdated();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

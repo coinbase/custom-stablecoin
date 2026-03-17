@@ -13,4 +13,12 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
 ]
 
+[lint]
+lint_on_build = false
+exclude_lints = [
+    "asm-keccak256", # keccak256 ok
+    "mixed-case-function", # URI ok
+    "mixed-case-variable", # URI ok
+]
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
