@@ -1,23 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-/// @title BlacklistStorage
+/// @title Blacklistable
 /// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for blacklisted addresses.
-library BlacklistStorage {
+abstract contract Blacklistable {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for the blacklist.
-    /// @custom:storage-location erc7201:coinbase.storage.CustomStablecoin.Blacklist
-    struct Layout {
+    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.Blacklist
+    struct BlacklistLayout {
         /// @dev Maps each account address to its blacklist status.
         mapping(address account => bool isBlacklisted) blacklisted;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.CustomStablecoin.Blacklist")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0xaa42287b5df5a176a661599ae27fcd3a6641452f1e83e14656b2ec30bf606600;
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Blacklist")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant BLACKLIST_STORAGE_LOCATION =
+        0x9b498cdae840f81fb381d9b0d2886f7cc4fa4aea185af7bea0ce66283831de00;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      EVENTS / ERRORS                       */
@@ -47,51 +48,58 @@ library BlacklistStorage {
     error CannotBlacklistZeroAddress();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     INTERNAL FUNCTIONS                     */
+    /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Adds `account` to the blacklist.
-    ///
-    /// @param account The address to blacklist.
-    function blacklist(address account) internal {
-        if (account == address(0)) revert CannotBlacklistZeroAddress();
-        if (isBlacklisted(account)) revert AddressBlacklisted({account: account});
-        layout().blacklisted[account] = true;
-        emit AccountBlacklisted({account: account});
-    }
-
-    /// @notice Removes `account` from the blacklist.
-    ///
-    /// @param account The address to unblacklist.
-    function unBlacklist(address account) internal {
-        if (!isBlacklisted(account)) revert AddressNotBlacklisted({account: account});
-        layout().blacklisted[account] = false;
-        emit AccountUnBlacklisted({account: account});
-    }
 
     /// @notice Returns whether `account` is blacklisted.
     ///
     /// @param account The address to query.
     ///
     /// @return True if the address is blacklisted.
-    function isBlacklisted(address account) internal view returns (bool) {
-        return layout().blacklisted[account];
+    function isBlacklisted(address account) public view virtual returns (bool) {
+        return _getBlacklistLayout().blacklisted[account];
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     INTERNAL FUNCTIONS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Adds `account` to the blacklist.
+    ///
+    /// @param account The address to blacklist.
+    function _blacklist(address account) internal {
+        if (account == address(0)) revert CannotBlacklistZeroAddress();
+        if (isBlacklisted(account)) revert AddressBlacklisted({account: account});
+        _getBlacklistLayout().blacklisted[account] = true;
+        emit AccountBlacklisted({account: account});
+    }
+
+    /// @notice Removes `account` from the blacklist.
+    ///
+    /// @param account The address to unblacklist.
+    function _unBlacklist(address account) internal {
+        if (!isBlacklisted(account)) revert AddressNotBlacklisted({account: account});
+        _getBlacklistLayout().blacklisted[account] = false;
+        emit AccountUnBlacklisted({account: account});
     }
 
     /// @notice Reverts if `account` is blacklisted.
     ///
     /// @param account The address to check.
-    function requireNotBlacklisted(address account) internal view {
+    function _requireNotBlacklisted(address account) internal view {
         if (isBlacklisted(account)) revert AddressBlacklisted({account: account});
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     PRIVATE FUNCTIONS                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
     ///
     /// @return $ Storage pointer to the layout struct.
-    function layout() internal pure returns (Layout storage $) {
-        // Assembly is required to load from the ERC-7201 namespaced storage slot.
+    function _getBlacklistLayout() private pure returns (BlacklistLayout storage $) {
         assembly {
-            $.slot := STORAGE_LOCATION
+            $.slot := BLACKLIST_STORAGE_LOCATION
         }
     }
 }

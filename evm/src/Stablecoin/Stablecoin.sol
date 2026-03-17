@@ -4,19 +4,26 @@ pragma solidity 0.8.30;
 import {
     AccessControlDefaultAdminRulesUpgradeable
 } from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {
     ERC20PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
+import {
+    ERC20PermitUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
-import {BlacklistStorage} from "./lib/BlacklistStorage.sol";
-import {MetadataStorage} from "./lib/MetadataStorage.sol";
-import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
+import {Blacklistable} from "./lib/Blacklistable.sol";
+import {EIP3009Upgradeable} from "./lib/EIP3009Upgradeable.sol";
+import {MintAllowance} from "./lib/MintAllowance.sol";
+import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
-/// @title CustomStablecoin
+/// @title Stablecoins
 /// @author Coinbase
-/// @notice Custom stablecoin implementation, upgradeable via a beacon proxy.
+/// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
 ///   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
@@ -28,28 +35,36 @@ import {MintAllowanceStorage} from "./lib/MintAllowanceStorage.sol";
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
-contract CustomStablecoin is
+///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
+contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
     ERC20PausableUpgradeable,
-    AccessControlDefaultAdminRulesUpgradeable
+    ERC20PermitUpgradeable,
+    EIP3009Upgradeable,
+    AccessControlDefaultAdminRulesUpgradeable,
+    Blacklistable,
+    MintAllowance,
+    TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
+    bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
     uint256 public constant DEFAULT_MINT_ALLOWANCE = 1_000_000;
     uint256 public constant DEFAULT_MINT_INTERVAL = 24 hours;
 
     /// @notice Default role assignments passed to {initialize}.
-    struct Roles {
+    struct InitialRoles {
         address minter;
         address mintAllowance;
         address burner;
         address pauser;
         address blacklister;
+        address metadata;
     }
 
     /// @notice Emitted when tokens are minted.
@@ -64,6 +79,11 @@ contract CustomStablecoin is
     /// @param burner The address that burned tokens.
     /// @param amount The number of tokens burned.
     event Burned(address indexed burner, uint256 amount);
+
+    /// @notice Thrown when the provided implementation address has no code or is the zero address.
+    ///
+    /// @param implementation The invalid implementation address.
+    error InvalidImplementation(address implementation);
 
     /// @notice Thrown when a minter address has no configured allowance.
     ///
@@ -91,16 +111,19 @@ contract CustomStablecoin is
     /// @param symbol        Token symbol.
     /// @param tokenDecimals Token decimal places (max 18).
     /// @param roles         Default role assignments for each operational role.
+    /// @param contractURI_  Optional contract-level metadata URI (ERC-7572). Pass empty string to skip.
     function initialize(
         address admin,
         uint48 adminDelay,
         string memory name,
         string memory symbol,
         uint8 tokenDecimals,
-        Roles memory roles
+        InitialRoles memory roles,
+        string memory contractURI_
     ) external initializer {
-        MetadataStorage.setDecimals({value: tokenDecimals});
+        _setDecimals({value: tokenDecimals});
         __ERC20_init(name, symbol);
+        __ERC20Permit_init(name);
         __ERC20Pausable_init();
         __AccessControlDefaultAdminRules_init(adminDelay, admin);
         _grantRole({role: MINT_ALLOWANCE_ROLE, account: roles.mintAllowance});
@@ -108,6 +131,10 @@ contract CustomStablecoin is
         _grantRole({role: BURN_ROLE, account: roles.burner});
         _grantRole({role: PAUSE_ROLE, account: roles.pauser});
         _grantRole({role: BLACKLIST_ROLE, account: roles.blacklister});
+        _grantRole({role: METADATA_ROLE, account: roles.metadata});
+        if (bytes(contractURI_).length > 0) {
+            _setContractURI(contractURI_);
+        }
     }
 
     /// @notice Mints `amount` tokens to `to`.
@@ -115,7 +142,7 @@ contract CustomStablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        MintAllowanceStorage.consume({minter: msg.sender, amount: amount});
+        _consumeMintAllowance({minter: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
@@ -132,7 +159,7 @@ contract CustomStablecoin is
         onlyRole(MINT_ALLOWANCE_ROLE)
     {
         if (!hasRole(MINT_ROLE, minter)) revert MinterNotConfigured({minter: minter});
-        MintAllowanceStorage.configureMinter(minter, maxAllowance, interval);
+        _configureMinter(minter, maxAllowance, interval);
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
@@ -157,34 +184,45 @@ contract CustomStablecoin is
     ///
     /// @param account Address to blacklist.
     function blacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        BlacklistStorage.blacklist(account);
+        _blacklist(account);
     }
 
     /// @notice Removes `account` from the blacklist.
     ///
     /// @param account Address to unblacklist.
     function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        BlacklistStorage.unBlacklist(account);
+        _unBlacklist(account);
     }
 
-    /// @notice Returns the estimated current mint allowance for `caller`.
+    /// @notice Updates the contract-level metadata URI (ERC-7572).
     ///
-    /// @dev Includes any pending replenishment that would apply at the current timestamp.
-    ///
-    /// @param caller Address to query.
-    ///
-    /// @return Current allowance including any pending replenishment.
-    function estimatedAllowance(address caller) external view returns (uint256) {
-        return MintAllowanceStorage.estimatedAllowance({minter: caller});
+    /// @param newContractURI The new metadata URI.
+    function setContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
+        _setContractURI(newContractURI);
     }
 
-    /// @notice Returns whether `account` is blacklisted.
+    /// @notice Permanently opts this proxy out of the shared beacon by writing a direct
+    /// implementation address into the ERC-1967 implementation slot.
     ///
-    /// @param account Address to query.
+    /// @dev After this call, the proxy's `_implementation()` returns `newImplementation`
+    /// directly instead of querying the beacon. This is a one-way operation — once set,
+    /// the proxy no longer follows beacon upgrades. The admin can still call this again
+    /// to point at a different implementation, but cannot return to beacon behavior.
     ///
-    /// @return True if the address is blacklisted.
-    function isBlacklisted(address account) external view returns (bool) {
-        return BlacklistStorage.isBlacklisted(account);
+    /// @param newImplementation The implementation address to delegate to. Must be a deployed
+    ///        contract (non-zero address with code).
+    function exitBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // Reject the zero address — exiting the beacon is one-way, clearing is not supported.
+        if (newImplementation == address(0)) revert InvalidImplementation({implementation: newImplementation});
+
+        // Ensure the target is a deployed contract, not an EOA or empty address.
+        if (newImplementation.code.length == 0) revert InvalidImplementation({implementation: newImplementation});
+
+        // Write directly to the ERC-1967 implementation slot. Once set, the proxy's
+        // _implementation() will return this address, bypassing the beacon entirely.
+        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = newImplementation;
+
+        emit IERC1967.Upgraded(newImplementation);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -192,8 +230,10 @@ contract CustomStablecoin is
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Returns the number of decimals used for token amounts.
-    function decimals() public view override returns (uint8) {
-        return MetadataStorage.getDecimals();
+    ///
+    /// @return The number of decimals.
+    function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
+        return TokenMetadata.decimals();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -210,9 +250,7 @@ contract CustomStablecoin is
         bool granted = super._grantRole(role, account);
         if (granted && role == MINT_ROLE) {
             uint256 allowance = DEFAULT_MINT_ALLOWANCE * 10 ** decimals();
-            MintAllowanceStorage.configureMinter({
-                minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL
-            });
+            _configureMinter({minter: account, maxAllowance: allowance, interval: DEFAULT_MINT_INTERVAL});
         }
         return granted;
     }
@@ -226,7 +264,7 @@ contract CustomStablecoin is
     function _revokeRole(bytes32 role, address account) internal override returns (bool) {
         bool revoked = super._revokeRole(role, account);
         if (revoked && role == MINT_ROLE) {
-            MintAllowanceStorage.removeMinter({minter: account});
+            _removeMinter({minter: account});
         }
         return revoked;
     }
@@ -240,9 +278,9 @@ contract CustomStablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        BlacklistStorage.requireNotBlacklisted({account: msg.sender});
-        BlacklistStorage.requireNotBlacklisted({account: from});
-        BlacklistStorage.requireNotBlacklisted({account: to});
+        _requireNotBlacklisted({account: msg.sender});
+        _requireNotBlacklisted({account: from});
+        _requireNotBlacklisted({account: to});
         super._update(from, to, value);
     }
 }
