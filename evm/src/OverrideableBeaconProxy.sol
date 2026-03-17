@@ -24,6 +24,7 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
     constructor(address beacon, bytes memory data) payable BeaconProxy(beacon, data) {}
 
+    /// @notice Accepts ETH and delegates to the implementation via the fallback mechanism.
     receive() external payable {
         _fallback();
     }

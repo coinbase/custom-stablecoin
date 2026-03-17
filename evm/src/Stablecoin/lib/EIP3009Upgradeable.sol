@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 /// @title EIP3009Upgradeable
 /// @author Coinbase
@@ -207,7 +207,7 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
 
     /// @notice Validates and executes a signed transfer authorization.
     ///
-    /// @param typehash   The EIP-712 typehash for the authorization type.
+    /// @param typehash    The EIP-712 typehash for the authorization type.
     /// @param from        The payer (signer of the authorization).
     /// @param to          The payee (recipient of the transfer).
     /// @param value       The amount to transfer.
@@ -236,6 +236,15 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
 
         _markAuthorizationUsed({authorizer: from, nonce: nonce});
         _transfer(from, to, value);
+    }
+
+    /// @notice Marks a nonce as used and emits the `AuthorizationUsed` event.
+    ///
+    /// @param authorizer The authorizer address.
+    /// @param nonce      The nonce to mark as used.
+    function _markAuthorizationUsed(address authorizer, bytes32 nonce) private {
+        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
+        emit AuthorizationUsed({authorizer: authorizer, nonce: nonce});
     }
 
     /// @notice Validates time window and nonce freshness for an authorization.
@@ -277,15 +286,6 @@ abstract contract EIP3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(digest, v, r, s);
         if (signer != authorizer) revert InvalidAuthorization();
-    }
-
-    /// @notice Marks a nonce as used and emits the `AuthorizationUsed` event.
-    ///
-    /// @param authorizer The authorizer address.
-    /// @param nonce      The nonce to mark as used.
-    function _markAuthorizationUsed(address authorizer, bytes32 nonce) private {
-        _getErc3009Layout().authorizationStates[authorizer][nonce] = true;
-        emit AuthorizationUsed({authorizer: authorizer, nonce: nonce});
     }
 
     /// @notice Returns a storage pointer to the ERC-7201 namespaced layout struct.
