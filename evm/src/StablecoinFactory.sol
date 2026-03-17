@@ -121,7 +121,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /// @param decimals Token decimal places (max 18).
     ///
     /// @return The deterministic proxy address.
-    function getAddress(
+    function computeAddress(
         string calldata name,
         string calldata symbol,
         uint8 decimals,
