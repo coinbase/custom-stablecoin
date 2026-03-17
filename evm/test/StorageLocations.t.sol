@@ -8,10 +8,10 @@ contract StorageLocationsTest is Test {
         return keccak256(abi.encode(uint256(keccak256(bytes(namespace))) - 1)) & ~bytes32(uint256(0xff));
     }
 
-    function test_MintAllowanceStorageLocation() public pure {
-        bytes32 expected = 0xe88ac28a8516a992a51aea3dabb181d8896444f55e0d6937cb1897b3b38da700;
-        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.MintAllowance");
-        assertEq(computed, expected, "MintAllowanceStorage slot mismatch");
+    function test_MintRateLimitStorageLocation() public pure {
+        bytes32 expected = 0x7eb699b05d5796f4e90d066d564c9d07f2ed4e5efc8636ffae31415cc65f3a00;
+        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.MintRateLimit");
+        assertEq(computed, expected, "MintRateLimitStorage slot mismatch");
     }
 
     function test_BlacklistStorageLocation() public pure {

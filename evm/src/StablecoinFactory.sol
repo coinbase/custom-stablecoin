@@ -124,6 +124,10 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         return Create2.computeAddress(salt, keccak256(bytecode));
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                      PUBLIC FUNCTIONS                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
     /// @notice Returns the shared beacon address used by all proxies deployed from this factory.
     ///
     /// @return The beacon address.

@@ -66,14 +66,14 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param nonce      The already-used nonce.
     error AuthorizationAlreadyUsed(address authorizer, bytes32 nonce);
 
-    /// @notice Thrown when `block.timestamp` is before the authorization's `validAfter`.
+    /// @notice Thrown when `block.timestamp` is not strictly after the authorization's `validAfter`.
     ///
-    /// @param validAfter The earliest allowed timestamp.
+    /// @param validAfter The earliest allowed timestamp (exclusive).
     error AuthorizationNotYetValid(uint256 validAfter);
 
-    /// @notice Thrown when `block.timestamp` is after the authorization's `validBefore`.
+    /// @notice Thrown when `block.timestamp` is not strictly before the authorization's `validBefore`.
     ///
-    /// @param validBefore The latest allowed timestamp.
+    /// @param validBefore The latest allowed timestamp (exclusive).
     error AuthorizationExpired(uint256 validBefore);
 
     /// @notice Thrown when `receiveWithAuthorization` is called by someone other than the payee.
@@ -82,7 +82,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param payee  The expected caller (the `to` address).
     error CallerMustBePayee(address caller, address payee);
 
-    /// @notice Thrown when the recovered signer does not match the expected authorizer.
+    /// @notice Thrown when the signature is invalid for the expected authorizer.
     error InvalidAuthorization();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -157,6 +157,10 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
         cancelAuthorization(authorizer, nonce, abi.encodePacked(r, s, v));
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                      PUBLIC FUNCTIONS                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Executes a transfer from `from` to `to` using a signed authorization.
     ///
@@ -243,10 +247,6 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         emit AuthorizationCanceled(authorizer, nonce);
     }
 
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                      PUBLIC FUNCTIONS                      */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
     /// @notice Returns whether a given authorization nonce has been used or canceled.
     ///
     /// @param authorizer The authorizer address.
@@ -298,21 +298,23 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         _transfer(from, to, value);
     }
 
-    /// @notice Reverts if the given nonce has already been used or canceled.
+    /// @notice Validates the signature, checks the nonce is unused, and marks it as consumed.
     ///
-    /// @param authorizer The authorizer address.
-    /// @param nonce      The nonce to check.
+    /// @param authorizer  The authorizer address.
+    /// @param nonce       The nonce to consume.
+    /// @param structHash  The EIP-712 struct hash of the authorization.
+    /// @param signature   The signature to validate against the authorizer.
     function _consumeAuthorization(address authorizer, bytes32 nonce, bytes32 structHash, bytes memory signature)
         private
     {
         ERC3009Layout storage $ = _getERC3009Layout();
 
+        // Check authorization not yet consumed
+        if ($.authorizationState[authorizer][nonce]) revert AuthorizationAlreadyUsed(authorizer, nonce);
+
         // Validate signature over authorization
         bytes32 digest = _hashTypedDataV4(structHash);
         if (!SignatureChecker.isValidSignatureNow(authorizer, digest, signature)) revert InvalidAuthorization();
-
-        // Check authorization not yet consumed
-        if ($.authorizationState[authorizer][nonce]) revert AuthorizationAlreadyUsed(authorizer, nonce);
 
         // Mark authorization as consumed
         $.authorizationState[authorizer][nonce] = true;
