@@ -18,15 +18,15 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Storage layout for ERC-3009 authorization nonces.
-    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.ERC3009
+    /// @custom:storage-location erc7201:coinbase.storage.Stablecoin.ERC3009Upgradeable
     struct ERC3009Layout {
         /// @dev Maps each authorizer to their nonce usage status.
         mapping(address authorizer => mapping(bytes32 nonce => bool used)) authorizationState;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.ERC3009")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.ERC3009Upgradeable")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant ERC3009_STORAGE_LOCATION =
-        0x427d307c31a45430da5a55d786be96204d2bd18e654f089714e3af8ce9abb000;
+        0xb8aebb83576e62291cd82363e38e83ae9b2360a49a089992dbdffe80b8e41600;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         CONSTANTS                          */
@@ -92,7 +92,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @notice Executes a transfer from `from` to `to` using a signed authorization.
     ///
     /// @dev Anyone may submit this transaction. The authorization is validated via EIP-712 signature
-    /// recovery. The transfer goes through `_transfer` -> `_update`, so sanction and pause checks apply.
+    /// recovery. The transfer goes through `_transfer` -> `_update`, so blocklist and pause checks apply.
     ///
     /// @param from        The payer (signer of the authorization).
     /// @param to          The payee (recipient of the transfer).
@@ -167,7 +167,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @dev Anyone may submit this transaction. Validates the authorization using
     /// `SignatureChecker.isValidSignatureNow`, which supports both 65-byte ECDSA signatures
     /// from EOAs and ERC-1271 signatures from smart contract wallets.
-    /// The transfer goes through `_transfer` -> `_update`, so sanction and pause checks apply.
+    /// The transfer goes through `_transfer` -> `_update`, so blocklist and pause checks apply.
     ///
     /// @param from        The payer (signer of the authorization).
     /// @param to          The payee (recipient of the transfer).

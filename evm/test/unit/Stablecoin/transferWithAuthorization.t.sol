@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {Sanctionable} from "src/lib/Sanctionable.sol";
+import {Blocklist} from "src/lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Tests for ERC-3009 transferWithAuthorization. Reverts are ordered by execution:
-/// validAfter → validBefore → nonce used → signature invalid → sanction (caller, from, to) → pause.
+/// validAfter → validBefore → nonce used → signature invalid → blocklist (caller, from, to) → pause.
 contract StablecoinTransferWithAuthorizationTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
@@ -51,38 +51,38 @@ contract StablecoinTransferWithAuthorizationTest is StablecoinTest {
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, wrongSig);
     }
 
-    /// @notice Verifies transferWithAuthorization reverts when the relayer (msg.sender) is sanctioned
-    /// @dev AddressSanctioned(msg.sender): relayer sanction is the first _update check after auth validation
-    function test_transferWithAuthorization_revert_sanctionedCaller(uint256 amount) public {
+    /// @notice Verifies transferWithAuthorization reverts when the relayer (msg.sender) is blocklisted
+    /// @dev AddressBlocklisted(msg.sender): relayer blocklist is the first _update check after auth validation
+    function test_transferWithAuthorization_revert_blocklistedCaller(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(42));
         bytes memory sig = _signTransferAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(relayer);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, relayer));
+        _blocklist(relayer);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, relayer));
         vm.prank(relayer);
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Verifies transferWithAuthorization reverts when the from address is sanctioned
-    /// @dev AddressSanctioned(from): the token holder/signer is blocked regardless of who relays
-    function test_transferWithAuthorization_revert_sanctionedFrom(uint256 amount) public {
+    /// @notice Verifies transferWithAuthorization reverts when the from address is blocklisted
+    /// @dev AddressBlocklisted(from): the token holder/signer is blocked regardless of who relays
+    function test_transferWithAuthorization_revert_blocklistedFrom(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(42));
         bytes memory sig = _signTransferAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(alice);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, alice));
+        _blocklist(alice);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, alice));
         vm.prank(relayer);
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Verifies transferWithAuthorization reverts when the to address is sanctioned
-    /// @dev AddressSanctioned(to): sanctioned recipients cannot receive tokens through any path
-    function test_transferWithAuthorization_revert_sanctionedTo(uint256 amount) public {
+    /// @notice Verifies transferWithAuthorization reverts when the to address is blocklisted
+    /// @dev AddressBlocklisted(to): blocklisted recipients cannot receive tokens through any path
+    function test_transferWithAuthorization_revert_blocklistedTo(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(42));
         bytes memory sig = _signTransferAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(bob);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, bob));
+        _blocklist(bob);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, bob));
         vm.prank(relayer);
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }

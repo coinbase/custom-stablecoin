@@ -7,7 +7,7 @@ import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 /// @dev Handler contract for stateful fuzzing. Restricts all operations to known actors so that
-/// ghost-balance and ghost-sanction state remain consistent with on-chain state throughout the run.
+/// ghost-balance and ghost-blocklist state remain consistent with on-chain state throughout the run.
 contract StablecoinHandler is Test {
     // ── Constants ─────────────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ contract StablecoinHandler is Test {
     address public alice;
     address public minter;
     address public burner;
-    address public sanctioner;
+    address public blocklister;
 
     /// @dev All token-holding actors. Mint recipients and transfer participants are restricted
     /// to this set so that sumBalances() accounts for every token in circulation.
@@ -34,11 +34,11 @@ contract StablecoinHandler is Test {
 
     // ── Ghost state ───────────────────────────────────────────────────────────────────────
 
-    /// @dev Records each actor's balance at the moment they were most recently sanctioned.
-    mapping(address => uint256) public balanceAtSanctionTime;
+    /// @dev Records each actor's balance at the moment they were most recently blocklisted.
+    mapping(address => uint256) public balanceAtBlocklistTime;
 
-    /// @dev True when the actor is currently sanctioned according to ghost state.
-    mapping(address => bool) public ghostSanctioned;
+    /// @dev True when the actor is currently blocklisted according to ghost state.
+    mapping(address => bool) public ghostBlocklisted;
 
     /// @dev ERC-3009 nonces that alice has successfully consumed on-chain.
     bytes32[] internal _aliceUsedNonces;
@@ -55,13 +55,13 @@ contract StablecoinHandler is Test {
         address carol_,
         address burner_,
         address minter_,
-        address sanctioner_
+        address blocklister_
     ) {
         stablecoin = stablecoin_;
         alice = alice_;
         minter = minter_;
         burner = burner_;
-        sanctioner = sanctioner_;
+        blocklister = blocklister_;
         actors.push(alice_);
         actors.push(bob_);
         actors.push(carol_);
@@ -73,7 +73,7 @@ contract StablecoinHandler is Test {
     /// @dev Mints up to the current rate-limit capacity to a randomly selected tracked actor.
     function mint(uint256 amount, uint256 recipientSeed) external {
         address to = actors[recipientSeed % actors.length];
-        if (ghostSanctioned[to]) return;
+        if (ghostBlocklisted[to]) return;
         uint256 limit = stablecoin.currentMintLimit(minter);
         if (limit == 0) return;
         amount = bound(amount, 1, limit);
@@ -83,7 +83,7 @@ contract StablecoinHandler is Test {
 
     /// @dev Burns a bounded amount from the burner's balance.
     function burn(uint256 amount) external {
-        if (ghostSanctioned[burner]) return;
+        if (ghostBlocklisted[burner]) return;
         uint256 balance = stablecoin.balanceOf(burner);
         if (balance == 0) return;
         amount = bound(amount, 1, balance);
@@ -95,7 +95,7 @@ contract StablecoinHandler is Test {
     function transfer(uint256 amount, uint256 fromSeed, uint256 toSeed) external {
         address from = actors[fromSeed % actors.length];
         address to = actors[toSeed % actors.length];
-        if (ghostSanctioned[from] || ghostSanctioned[to]) return;
+        if (ghostBlocklisted[from] || ghostBlocklisted[to]) return;
         uint256 balance = stablecoin.balanceOf(from);
         if (balance == 0) return;
         amount = bound(amount, 1, balance);
@@ -103,29 +103,29 @@ contract StablecoinHandler is Test {
         stablecoin.transfer(to, amount);
     }
 
-    /// @dev Sanctions a randomly selected tracked actor and snapshots their current balance.
-    function sanction(uint256 actorSeed) external {
+    /// @dev Blocklists a randomly selected tracked actor and snapshots their current balance.
+    function blocklist(uint256 actorSeed) external {
         address target = actors[actorSeed % actors.length];
-        if (ghostSanctioned[target]) return;
-        balanceAtSanctionTime[target] = stablecoin.balanceOf(target);
-        ghostSanctioned[target] = true;
-        vm.prank(sanctioner);
-        stablecoin.updateSanctionStatus(target, true);
+        if (ghostBlocklisted[target]) return;
+        balanceAtBlocklistTime[target] = stablecoin.balanceOf(target);
+        ghostBlocklisted[target] = true;
+        vm.prank(blocklister);
+        stablecoin.updateBlocklistStatus(target, true);
     }
 
-    /// @dev Unsanctions a randomly selected tracked actor.
-    function unsanction(uint256 actorSeed) external {
+    /// @dev Unblocklists a randomly selected tracked actor.
+    function unblocklist(uint256 actorSeed) external {
         address target = actors[actorSeed % actors.length];
-        if (!ghostSanctioned[target]) return;
-        ghostSanctioned[target] = false;
-        vm.prank(sanctioner);
-        stablecoin.updateSanctionStatus(target, false);
+        if (!ghostBlocklisted[target]) return;
+        ghostBlocklisted[target] = false;
+        vm.prank(blocklister);
+        stablecoin.updateBlocklistStatus(target, false);
     }
 
     /// @dev Submits a transferWithAuthorization signed by alice, consuming a unique nonce.
     function consumeNonce(uint256 amount, uint256 toSeed) external {
         address to = actors[toSeed % actors.length];
-        if (ghostSanctioned[alice] || ghostSanctioned[to]) return;
+        if (ghostBlocklisted[alice] || ghostBlocklisted[to]) return;
         uint256 aliceBalance = stablecoin.balanceOf(alice);
         if (aliceBalance == 0) return;
         amount = bound(amount, 1, aliceBalance);
@@ -171,7 +171,7 @@ contract StablecoinInvariantTest is StablecoinTest {
     function setUp() public override {
         super.setUp();
 
-        handler = new StablecoinHandler(stablecoin, alice, bob, carol, burner, minter, sanctioner);
+        handler = new StablecoinHandler(stablecoin, alice, bob, carol, burner, minter, blocklister);
 
         targetContract(address(handler));
     }
@@ -184,26 +184,26 @@ contract StablecoinInvariantTest is StablecoinTest {
         assertEq(stablecoin.totalSupply(), handler.sumBalances());
     }
 
-    // ── Sanction enforcement ──────────────────────────────────────────────────────────────
+    // ── Blocklist enforcement ─────────────────────────────────────────────────────────────
 
-    /// @notice Invariant: a sanctioned address can never receive tokens via any transfer path
-    /// @dev Sanction: _requireNotSanctioned(to) in _update blocks all inbound transfers; balance must never increase while sanctioned
-    function invariant_sanctionedAddressCannotReceiveTokens() public view {
+    /// @notice Invariant: a blocklisted address can never receive tokens via any transfer path
+    /// @dev Blocklist: _requireNotBlocklisted(to) in _update blocks all inbound transfers; balance must never increase while blocklisted
+    function invariant_blocklistedAddressCannotReceiveTokens() public view {
         for (uint256 i = 0; i < 4; i++) {
             address actor = handler.actors(i);
-            if (handler.ghostSanctioned(actor)) {
-                assertLe(stablecoin.balanceOf(actor), handler.balanceAtSanctionTime(actor));
+            if (handler.ghostBlocklisted(actor)) {
+                assertLe(stablecoin.balanceOf(actor), handler.balanceAtBlocklistTime(actor));
             }
         }
     }
 
-    /// @notice Invariant: a sanctioned address can never send tokens via any transfer path
-    /// @dev Sanction: _requireNotSanctioned(from) and _requireNotSanctioned(msg.sender) in _update block all outbound transfers
-    function invariant_sanctionedAddressCannotSendTokens() public view {
+    /// @notice Invariant: a blocklisted address can never send tokens via any transfer path
+    /// @dev Blocklist: _requireNotBlocklisted(from) and _requireNotBlocklisted(msg.sender) in _update block all outbound transfers
+    function invariant_blocklistedAddressCannotSendTokens() public view {
         for (uint256 i = 0; i < 4; i++) {
             address actor = handler.actors(i);
-            if (handler.ghostSanctioned(actor)) {
-                assertGe(stablecoin.balanceOf(actor), handler.balanceAtSanctionTime(actor));
+            if (handler.ghostBlocklisted(actor)) {
+                assertGe(stablecoin.balanceOf(actor), handler.balanceAtBlocklistTime(actor));
             }
         }
     }

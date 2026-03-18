@@ -34,7 +34,7 @@ contract StablecoinMintTest is StablecoinTest {
     }
 
     /// @notice Verifies mint reverts when the contract is paused
-    /// @dev EnforcedPause fires in super._update after sanction checks; sanction checks pass first
+    /// @dev EnforcedPause fires in super._update after blocklist checks; blocklist checks pass first
     function test_mint_revert_whenPaused(uint256 amount) public {
         uint256 remaining = stablecoin.currentMintLimit(minter);
         amount = bound(amount, 1, remaining);

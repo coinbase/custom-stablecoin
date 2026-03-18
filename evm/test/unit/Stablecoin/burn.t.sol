@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {Sanctionable} from "src/lib/Sanctionable.sol";
+import {Blocklist} from "src/lib/Blocklist.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
@@ -23,18 +23,18 @@ contract StablecoinBurnTest is StablecoinTest {
         stablecoin.burn(1);
     }
 
-    /// @notice Verifies burn reverts when the caller is sanctioned
-    /// @dev AddressSanctioned: _requireNotSanctioned(msg.sender) fires in _update before the pause check
-    function test_burn_revert_callerSanctioned(uint256 amount) public {
+    /// @notice Verifies burn reverts when the caller is blocklisted
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(msg.sender) fires in _update before the pause check
+    function test_burn_revert_callerBlocklisted(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        _sanction(burner);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, burner));
+        _blocklist(burner);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, burner));
         vm.prank(burner);
         stablecoin.burn(amount);
     }
 
     /// @notice Verifies burn reverts when the contract is paused
-    /// @dev EnforcedPause fires in super._update after sanction checks pass
+    /// @dev EnforcedPause fires in super._update after blocklist checks pass
     function test_burn_revert_whenPaused(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         _pause();

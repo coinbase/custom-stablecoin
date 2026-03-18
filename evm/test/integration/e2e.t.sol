@@ -120,7 +120,7 @@ contract StablecoinE2ETest is StablecoinTest {
     }
 
     /// @notice Verifies multiple stablecoins deployed from the factory are fully independent
-    /// @dev Cross-contract isolation: pausing or sanctioning on token A must have no effect on token B
+    /// @dev Cross-contract isolation: pausing or blocklisting on token A must have no effect on token B
     function test_e2e_multipleStablecoinsFromFactory(bytes32 salt1, bytes32 salt2) public {
         vm.assume(salt1 != salt2);
 
@@ -141,11 +141,11 @@ contract StablecoinE2ETest is StablecoinTest {
         Stablecoin scA = Stablecoin(addrA);
         Stablecoin scB = Stablecoin(addrB);
 
-        // Set up pause and sanction roles on both
+        // Set up pause and blocklist roles on both
         vm.startPrank(localAdmin);
         scA.grantRole(scA.PAUSE_ROLE(), localAdmin);
         scB.grantRole(scB.PAUSE_ROLE(), localAdmin);
-        scA.grantRole(scA.SANCTION_ROLE(), localAdmin);
+        scA.grantRole(scA.BLOCKLIST_ROLE(), localAdmin);
         vm.stopPrank();
 
         // Pause scA — scB must remain unpaused
@@ -154,11 +154,11 @@ contract StablecoinE2ETest is StablecoinTest {
         assertTrue(scA.paused());
         assertFalse(scB.paused());
 
-        // Sanction target on scA — not sanctioned on scB
+        // Blocklist target on scA — not blocklisted on scB
         address target = makeAddr("target");
         vm.prank(localAdmin);
-        scA.updateSanctionStatus(target, true);
-        assertTrue(scA.isSanctioned(target));
-        assertFalse(scB.isSanctioned(target));
+        scA.updateBlocklistStatus(target, true);
+        assertTrue(scA.isBlocklisted(target));
+        assertFalse(scB.isBlocklisted(target));
     }
 }

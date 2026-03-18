@@ -3,49 +3,49 @@ pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {Sanctionable} from "src/lib/Sanctionable.sol";
+import {Blocklist} from "src/lib/Blocklist.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
-/// @dev Tests the custom _update hook that enforces sanction and pause checks on all transfers,
+/// @dev Tests the custom _update hook that enforces blocklist and pause checks on all transfers,
 /// including direct transfer() and delegated transferFrom() calls.
 contract StablecoinTransferTest is StablecoinTest {
     // ── Reverts (in _update execution order: caller → from → to → pause) ─────────────────
 
-    /// @notice Verifies transfer reverts when the caller (msg.sender) is sanctioned
-    /// @dev AddressSanctioned: _requireNotSanctioned(msg.sender) is the first check in _update
-    function test_transfer_revert_callerSanctioned(uint256 amount) public {
+    /// @notice Verifies transfer reverts when the caller (msg.sender) is blocklisted
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(msg.sender) is the first check in _update
+    function test_transfer_revert_callerBlocklisted(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        _sanction(alice);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, alice));
+        _blocklist(alice);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, alice));
         vm.prank(alice);
         stablecoin.transfer(bob, amount);
     }
 
-    /// @notice Verifies transferFrom reverts when the from address is sanctioned and differs from caller
-    /// @dev AddressSanctioned: _requireNotSanctioned(from) fires for the token holder; tested via transferFrom
-    function test_transfer_revert_fromSanctioned(uint256 amount) public {
+    /// @notice Verifies transferFrom reverts when the from address is blocklisted and differs from caller
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(from) fires for the token holder; tested via transferFrom
+    function test_transfer_revert_fromBlocklisted(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        // carol is the caller (spender), alice is the sanctioned from address
+        // carol is the caller (spender), alice is the blocklisted from address
         vm.prank(alice);
         stablecoin.approve(carol, amount);
-        _sanction(alice);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, alice));
+        _blocklist(alice);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, alice));
         vm.prank(carol);
         stablecoin.transferFrom(alice, carol, amount);
     }
 
-    /// @notice Verifies transfer reverts when the recipient address is sanctioned
-    /// @dev AddressSanctioned: _requireNotSanctioned(to) is the third check; catches sanctioned receivers
-    function test_transfer_revert_recipientSanctioned(uint256 amount) public {
+    /// @notice Verifies transfer reverts when the recipient address is blocklisted
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(to) is the third check; catches blocklisted receivers
+    function test_transfer_revert_recipientBlocklisted(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        _sanction(carol);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, carol));
+        _blocklist(carol);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, carol));
         vm.prank(alice);
         stablecoin.transfer(carol, amount);
     }
 
     /// @notice Verifies transfer reverts when the contract is paused
-    /// @dev EnforcedPause: fires in super._update after all three sanction checks pass
+    /// @dev EnforcedPause: fires in super._update after all three blocklist checks pass
     function test_transfer_revert_whenPaused(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         _pause();

@@ -33,7 +33,7 @@ contract StablecoinTest is Test {
     address internal minter = makeAddr("minter");
     address internal burner = makeAddr("burner");
     address internal rateLimitAdmin = makeAddr("rateLimitAdmin");
-    address internal sanctioner = makeAddr("sanctioner");
+    address internal blocklister = makeAddr("blocklister");
     address internal pauser = makeAddr("pauser");
     address internal metadataAdmin = makeAddr("metadataAdmin");
     address internal relayer = makeAddr("relayer");
@@ -79,7 +79,7 @@ contract StablecoinTest is Test {
         vm.label(minter, "minter");
         vm.label(burner, "burner");
         vm.label(rateLimitAdmin, "rateLimitAdmin");
-        vm.label(sanctioner, "sanctioner");
+        vm.label(blocklister, "blocklister");
         vm.label(pauser, "pauser");
         vm.label(metadataAdmin, "metadataAdmin");
         vm.label(relayer, "relayer");
@@ -90,7 +90,7 @@ contract StablecoinTest is Test {
         stablecoin.grantRole(stablecoin.MINT_ROLE(), minter);
         stablecoin.grantRole(stablecoin.BURN_ROLE(), burner);
         stablecoin.grantRole(stablecoin.MINT_RATE_LIMIT_ROLE(), rateLimitAdmin);
-        stablecoin.grantRole(stablecoin.SANCTION_ROLE(), sanctioner);
+        stablecoin.grantRole(stablecoin.BLOCKLIST_ROLE(), blocklister);
         stablecoin.grantRole(stablecoin.PAUSE_ROLE(), pauser);
         stablecoin.grantRole(stablecoin.METADATA_ROLE(), metadataAdmin);
         vm.stopPrank();
@@ -151,18 +151,18 @@ contract StablecoinTest is Test {
         stablecoin.unpause();
     }
 
-    // ── Sanction helpers ──────────────────────────────────────────────────────────────────
+    // ── Blocklist helpers ─────────────────────────────────────────────────────────────────
 
-    /// @dev Sanctions `account` as the sanctioner.
-    function _sanction(address account) internal {
-        vm.prank(sanctioner);
-        stablecoin.updateSanctionStatus(account, true);
+    /// @dev Blocklists `account` as the blocklister.
+    function _blocklist(address account) internal {
+        vm.prank(blocklister);
+        stablecoin.updateBlocklistStatus(account, true);
     }
 
-    /// @dev Unsanctions `account` as the sanctioner.
-    function _unsanction(address account) internal {
-        vm.prank(sanctioner);
-        stablecoin.updateSanctionStatus(account, false);
+    /// @dev Unblocklists `account` as the blocklister.
+    function _unblocklist(address account) internal {
+        vm.prank(blocklister);
+        stablecoin.updateBlocklistStatus(account, false);
     }
 
     // ── EIP-712 digest helpers ────────────────────────────────────────────────────────────

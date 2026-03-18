@@ -138,11 +138,11 @@ contract StablecoinWorkflowTest is StablecoinTest {
         assertEq(stablecoin.balanceOf(carol), 0);
     }
 
-    // ── Sanction / unsanction workflow ────────────────────────────────────────────────────
+    // ── Blocklist / unblocklist workflow ─────────────────────────────────────────────────
 
-    /// @notice Verifies sanctioning blocks all transfer paths and unsanctioning restores them
-    /// @dev State at each step: mint → sanction → transfer blocked → unsanction → transfer succeeds
-    function test_workflow_sanctionAndUnsanction(address account, uint256 amount) public {
+    /// @notice Verifies blocklisting blocks all transfer paths and unblocklisting restores them
+    /// @dev State at each step: mint → blocklist → transfer blocked → unblocklist → transfer succeeds
+    function test_workflow_blocklistAndUnblocklist(address account, uint256 amount) public {
         vm.assume(account != address(0) && account != minter);
         amount = bound(amount, 1, INITIAL_MINT);
 
@@ -151,23 +151,23 @@ contract StablecoinWorkflowTest is StablecoinTest {
         _mint(account, amount);
         assertEq(stablecoin.balanceOf(account), balanceBefore + amount);
 
-        // Sanction account
-        _sanction(account);
-        assertTrue(stablecoin.isSanctioned(account));
+        // Blocklist account
+        _blocklist(account);
+        assertTrue(stablecoin.isBlocklisted(account));
 
         // Inbound transfer blocked
-        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("AddressSanctioned(address)")), account));
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("AddressBlocklisted(address)")), account));
         vm.prank(alice);
         stablecoin.transfer(account, 1);
 
         // Outbound transfer blocked
-        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("AddressSanctioned(address)")), account));
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("AddressBlocklisted(address)")), account));
         vm.prank(account);
         stablecoin.transfer(alice, 1);
 
-        // Unsanction
-        _unsanction(account);
-        assertFalse(stablecoin.isSanctioned(account));
+        // Unblocklist
+        _unblocklist(account);
+        assertFalse(stablecoin.isBlocklisted(account));
 
         // Transfer succeeds
         vm.prank(account);

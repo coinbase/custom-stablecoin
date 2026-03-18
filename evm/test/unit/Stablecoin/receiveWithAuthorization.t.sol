@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {Sanctionable} from "src/lib/Sanctionable.sol";
+import {Blocklist} from "src/lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
@@ -9,7 +9,7 @@ import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 /// transferWithAuthorization: all tWA revert and success paths apply here, plus the
 /// CallerMustBePayee guard which fires first. Reverts are ordered by execution:
 /// callerMustBePayee → validAfter → validBefore → nonce used → signature invalid
-/// → sanction (caller/to, from) → pause.
+/// → blocklist (caller/to, from) → pause.
 contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
@@ -65,38 +65,38 @@ contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
         stablecoin.receiveWithAuthorization(carol, bob, amount, 0, type(uint256).max, nonce, wrongSig);
     }
 
-    /// @notice Verifies receiveWithAuthorization reverts when the caller (payee) is sanctioned
-    /// @dev AddressSanctioned(msg.sender): in receiveWithAuth msg.sender == to; _requireNotSanctioned(msg.sender) fires first
-    function test_receiveWithAuthorization_revert_sanctionedCaller(uint256 amount) public {
+    /// @notice Verifies receiveWithAuthorization reverts when the caller (payee) is blocklisted
+    /// @dev AddressBlocklisted(msg.sender): in receiveWithAuth msg.sender == to; _requireNotBlocklisted(msg.sender) fires first
+    function test_receiveWithAuthorization_revert_blocklistedCaller(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(41));
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(bob);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, bob));
+        _blocklist(bob);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, bob));
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Verifies receiveWithAuthorization reverts when the from address is sanctioned
-    /// @dev AddressSanctioned(from): the signer/payer is blocked regardless of who submits
-    function test_receiveWithAuthorization_revert_sanctionedFrom(uint256 amount) public {
+    /// @notice Verifies receiveWithAuthorization reverts when the from address is blocklisted
+    /// @dev AddressBlocklisted(from): the signer/payer is blocked regardless of who submits
+    function test_receiveWithAuthorization_revert_blocklistedFrom(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(42));
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(alice);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, alice));
+        _blocklist(alice);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, alice));
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Verifies receiveWithAuthorization reverts when the to address is sanctioned
-    /// @dev AddressSanctioned(to): _requireNotSanctioned(to) in _update blocks the recipient regardless of caller
-    function test_receiveWithAuthorization_revert_sanctionedTo(uint256 amount) public {
+    /// @notice Verifies receiveWithAuthorization reverts when the to address is blocklisted
+    /// @dev AddressBlocklisted(to): _requireNotBlocklisted(to) in _update blocks the recipient regardless of caller
+    function test_receiveWithAuthorization_revert_blocklistedTo(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes32 nonce = bytes32(uint256(43));
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _sanction(bob);
-        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, bob));
+        _blocklist(bob);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, bob));
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }

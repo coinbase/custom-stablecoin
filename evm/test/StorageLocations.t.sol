@@ -14,10 +14,10 @@ contract StorageLocationsTest is Test {
         assertEq(computed, expected, "MintRateLimitStorage slot mismatch");
     }
 
-    function test_SanctionStorageLocation() public pure {
-        bytes32 expected = 0x18554b1fc5de6153e5db6e86167c5329c7986180f7c380131540ec57c4270d00;
-        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.Sanction");
-        assertEq(computed, expected, "SanctionStorage slot mismatch");
+    function test_BlocklistStorageLocation() public pure {
+        bytes32 expected = 0x2b7d78bb522e987c413d13def90590415d174dbd956b1e8f62074dd049e4d100;
+        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.Blocklist");
+        assertEq(computed, expected, "BlocklistStorage slot mismatch");
     }
 
     function test_MetadataStorageLocation() public pure {
@@ -27,8 +27,8 @@ contract StorageLocationsTest is Test {
     }
 
     function test_ERC3009StorageLocation() public pure {
-        bytes32 expected = 0x427d307c31a45430da5a55d786be96204d2bd18e654f089714e3af8ce9abb000;
-        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.ERC3009");
+        bytes32 expected = 0xb8aebb83576e62291cd82363e38e83ae9b2360a49a089992dbdffe80b8e41600;
+        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.ERC3009Upgradeable");
         assertEq(computed, expected, "ERC3009Storage slot mismatch");
     }
 
