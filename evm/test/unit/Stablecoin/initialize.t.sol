@@ -2,8 +2,8 @@
 pragma solidity 0.8.30;
 
 import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
+import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
-import {OverrideableBeaconProxy} from "src/OverrideableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 contract StablecoinInitializeTest is StablecoinTest {
@@ -11,7 +11,7 @@ contract StablecoinInitializeTest is StablecoinTest {
     function setUp() public override {
         stablecoinImpl = new Stablecoin();
         beacon = new MockBeacon(address(stablecoinImpl));
-        proxy = new OverrideableBeaconProxy(address(beacon), "");
+        proxy = new MutableBeaconProxy(address(beacon), "");
         stablecoin = Stablecoin(address(proxy));
 
         vm.label(address(stablecoin), "Stablecoin");

@@ -10,12 +10,12 @@ import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
-contract StablecoinUpdateBeaconAndCallTest is StablecoinTest {
+contract StablecoinupdateBeaconToAndCallTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
-    /// @notice Verifies updateBeaconAndCall reverts for any caller without DEFAULT_ADMIN_ROLE
+    /// @notice Verifies updateBeaconToAndCall reverts for any caller without DEFAULT_ADMIN_ROLE
     /// @dev Access control: onlyRole(DEFAULT_ADMIN_ROLE) must reject all unauthorized callers
-    function test_updateBeaconAndCall_revert_unauthorized(address caller) public {
+    function test_updateBeaconToAndCall_revert_unauthorized(address caller) public {
         vm.assume(!stablecoin.hasRole(stablecoin.DEFAULT_ADMIN_ROLE(), caller));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -23,37 +23,37 @@ contract StablecoinUpdateBeaconAndCallTest is StablecoinTest {
             )
         );
         vm.prank(caller);
-        stablecoin.updateBeaconAndCall(address(beacon), "");
+        stablecoin.updateBeaconToAndCall(address(beacon), "");
     }
 
-    /// @notice Verifies updateBeaconAndCall reverts when newBeacon is the zero address
+    /// @notice Verifies updateBeaconToAndCall reverts when newBeacon is the zero address
     /// @dev InvalidBeacon: zero address has no code; must be rejected before the slot write
-    function test_updateBeaconAndCall_revert_invalidBeacon_zero() public {
+    function test_updateBeaconToAndCall_revert_invalidBeacon_zero() public {
         vm.expectRevert(abi.encodeWithSelector(ERC1967Utils.ERC1967InvalidBeacon.selector, address(0)));
         vm.prank(admin);
-        stablecoin.updateBeaconAndCall(address(0), "");
+        stablecoin.updateBeaconToAndCall(address(0), "");
     }
 
-    /// @notice Verifies updateBeaconAndCall reverts when newBeacon points to an address with no code
+    /// @notice Verifies updateBeaconToAndCall reverts when newBeacon points to an address with no code
     /// @dev InvalidBeacon: code.length == 0 check prevents pointing at EOAs or empty addresses
-    function test_updateBeaconAndCall_revert_invalidBeacon_noCode(address newBeacon) public {
+    function test_updateBeaconToAndCall_revert_invalidBeacon_noCode(address newBeacon) public {
         vm.assume(newBeacon != address(0));
         vm.assume(newBeacon.code.length == 0);
         vm.expectRevert(abi.encodeWithSelector(ERC1967Utils.ERC1967InvalidBeacon.selector, newBeacon));
         vm.prank(admin);
-        stablecoin.updateBeaconAndCall(newBeacon, "");
+        stablecoin.updateBeaconToAndCall(newBeacon, "");
     }
 
     // ── Happy paths ───────────────────────────────────────────────────────────────────────
 
-    /// @notice Verifies updateBeaconAndCall writes the beacon slot so the proxy follows the new beacon
+    /// @notice Verifies updateBeaconToAndCall writes the beacon slot so the proxy follows the new beacon
     /// @dev After the call, the proxy delegates to the new beacon's implementation, not the old one
-    function test_updateBeaconAndCall_success_updatesBeaconSlot() public {
+    function test_updateBeaconToAndCall_success_updatesBeaconSlot() public {
         Stablecoin newImpl = new Stablecoin();
         MockBeacon newBeacon = new MockBeacon(address(newImpl));
 
         vm.prank(admin);
-        stablecoin.updateBeaconAndCall(address(newBeacon), "");
+        stablecoin.updateBeaconToAndCall(address(newBeacon), "");
 
         // The ERC-1967 beacon slot should now point at newBeacon
         bytes32 slotValue = vm.load(address(proxy), ERC1967Utils.BEACON_SLOT);
@@ -67,15 +67,15 @@ contract StablecoinUpdateBeaconAndCallTest is StablecoinTest {
         assertEq(stablecoin.name(), TOKEN_NAME);
     }
 
-    /// @notice Verifies updateBeaconAndCall emits the BeaconUpgraded event with the new beacon address
+    /// @notice Verifies updateBeaconToAndCall emits the BeaconUpgraded event with the new beacon address
     /// @dev Event integrity: IERC1967.BeaconUpgraded must be emitted so indexers track the beacon swap
-    function test_updateBeaconAndCall_success_emitsBeaconUpgraded() public {
+    function test_updateBeaconToAndCall_success_emitsBeaconUpgraded() public {
         Stablecoin newImpl = new Stablecoin();
         MockBeacon newBeacon = new MockBeacon(address(newImpl));
 
         vm.expectEmit(true, false, false, false);
         emit IERC1967.BeaconUpgraded(address(newBeacon));
         vm.prank(admin);
-        stablecoin.updateBeaconAndCall(address(newBeacon), "");
+        stablecoin.updateBeaconToAndCall(address(newBeacon), "");
     }
 }

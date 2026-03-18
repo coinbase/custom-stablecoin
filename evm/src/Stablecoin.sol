@@ -160,7 +160,7 @@ contract Stablecoin is
     ///
     /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
     /// @param data      Optional calldata to forward to the new implementation via delegatecall.
-    function updateBeaconAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
         ERC1967Utils.upgradeBeaconToAndCall(newBeacon, data);
     }
 

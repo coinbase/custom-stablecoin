@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
-import {OverrideableBeaconProxy} from "src/OverrideableBeaconProxy.sol";
+import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 /// @dev Replay attack tests for ERC-3009 and ERC-2612 (permit) signed authorizations.
@@ -92,7 +92,7 @@ contract StablecoinReplayTest is StablecoinTest {
         // Deploy a second stablecoin with a different address → different domain separator
         Stablecoin impl2 = new Stablecoin();
         bytes memory initData = abi.encodeCall(Stablecoin.initialize, (TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, admin));
-        Stablecoin stablecoin2 = Stablecoin(address(new OverrideableBeaconProxy(address(beacon), initData)));
+        Stablecoin stablecoin2 = Stablecoin(address(new MutableBeaconProxy(address(beacon), initData)));
 
         // Same signature is invalid on stablecoin2
         vm.expectRevert(ERC3009Upgradeable.InvalidAuthorization.selector);
