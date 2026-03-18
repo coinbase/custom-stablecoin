@@ -156,7 +156,7 @@ contract Stablecoin is
     ///
     /// @dev Calls `ERC1967Utils.upgradeBeaconToAndCall`, which updates the ERC-1967 beacon slot
     /// to point at `newBeacon` and optionally forwards `data` via delegatecall to the new
-    /// implementation. All proxies sharing this beacon will follow the upgrade.
+    /// implementation.
     ///
     /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
     /// @param data      Optional calldata to forward to the new implementation via delegatecall.
