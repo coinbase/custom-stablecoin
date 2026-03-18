@@ -8,8 +8,8 @@ build-production:
 
 # Update the committed gas snapshot baseline
 snapshot:
-	forge snapshot --snap test/benchmark/.gas-snapshot
+	forge snapshot
 
 # Check for gas regressions against the committed baseline
 snapshot-diff:
-	forge snapshot --diff test/benchmark/.gas-snapshot
+	forge snapshot --diff

@@ -3,9 +3,9 @@ pragma solidity 0.8.30;
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
-/// @dev Gas benchmarks for core Stablecoin operations. Each test calls vm.snapshotGasLastCall()
-/// to record a named gas measurement. Commit .gas-snapshot and run `forge snapshot --diff` in CI
-/// to catch regressions. Benchmarks use bounded fuzz inputs for realistic values.
+/// @dev Gas benchmarks for core Stablecoin operations. Run `forge snapshot` to update .gas-snapshot
+/// at the repo root and commit the result. In CI run `forge snapshot --diff` to catch regressions.
+/// Benchmarks use bounded fuzz inputs so the snapshot records μ (mean) and ~ (median) across runs.
 contract StablecoinBenchmarkTest is StablecoinTest {
     // ── Isolated operation benchmarks ─────────────────────────────────────────────────────
 
@@ -15,7 +15,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         amount = bound(amount, 1, stablecoin.currentMintLimit(minter));
         vm.prank(minter);
         stablecoin.mint(alice, amount);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "mint");
     }
 
     /// @notice Measures gas for a single burn call when the burner has a sufficient balance
@@ -24,7 +23,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         amount = bound(amount, 1, INITIAL_MINT);
         vm.prank(burner);
         stablecoin.burn(amount);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "burn");
     }
 
     /// @notice Measures gas for a direct ERC-20 transfer between two accounts
@@ -33,7 +31,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         amount = bound(amount, 1, INITIAL_MINT);
         vm.prank(alice);
         stablecoin.transfer(bob, amount);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "transfer");
     }
 
     /// @notice Measures gas for a transferWithAuthorization submitted by a relayer
@@ -44,7 +41,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         bytes memory sig = _signTransferAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
         vm.prank(relayer);
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "transferWithAuthorization");
     }
 
     /// @notice Measures gas for a receiveWithAuthorization submitted by the payee
@@ -55,7 +51,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "receiveWithAuthorization");
     }
 
     /// @notice Measures gas for an updateSanctionStatus call that sanctions a previously clean address
@@ -63,7 +58,6 @@ contract StablecoinBenchmarkTest is StablecoinTest {
     function test_benchmark_updateSanctionStatus() public {
         vm.prank(sanctioner);
         stablecoin.updateSanctionStatus(carol, true);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "updateSanctionStatus");
     }
 
     // ── First vs. subsequent operation ───────────────────────────────────────────────────
@@ -77,11 +71,9 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         address freshRecipient = makeAddr("freshRecipient");
         vm.prank(minter);
         stablecoin.mint(freshRecipient, amount);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "mint_cold");
 
         // Second mint to the same address (warm SSTORE)
         vm.prank(minter);
         stablecoin.mint(freshRecipient, amount);
-        vm.snapshotGasLastCall("StablecoinBenchmark", "mint_warm");
     }
 }

@@ -147,8 +147,9 @@ contract StablecoinWorkflowTest is StablecoinTest {
         amount = bound(amount, 1, INITIAL_MINT);
 
         // Mint tokens to account
+        uint256 balanceBefore = stablecoin.balanceOf(account);
         _mint(account, amount);
-        assertEq(stablecoin.balanceOf(account), amount);
+        assertEq(stablecoin.balanceOf(account), balanceBefore + amount);
 
         // Sanction account
         _sanction(account);
@@ -171,7 +172,7 @@ contract StablecoinWorkflowTest is StablecoinTest {
         // Transfer succeeds
         vm.prank(account);
         stablecoin.transfer(alice, 1);
-        assertEq(stablecoin.balanceOf(account), amount - 1);
+        assertEq(stablecoin.balanceOf(account), balanceBefore + amount - 1);
     }
 
     // ── Beacon upgrade scenarios ──────────────────────────────────────────────────────────

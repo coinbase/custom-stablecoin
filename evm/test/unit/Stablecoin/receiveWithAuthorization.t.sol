@@ -65,6 +65,18 @@ contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
         stablecoin.receiveWithAuthorization(carol, bob, amount, 0, type(uint256).max, nonce, wrongSig);
     }
 
+    /// @notice Verifies receiveWithAuthorization reverts when the caller (payee) is sanctioned
+    /// @dev AddressSanctioned(msg.sender): in receiveWithAuth msg.sender == to; _requireNotSanctioned(msg.sender) fires first
+    function test_receiveWithAuthorization_revert_sanctionedCaller(uint256 amount) public {
+        amount = bound(amount, 1, INITIAL_MINT);
+        bytes32 nonce = bytes32(uint256(41));
+        bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
+        _sanction(bob);
+        vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, bob));
+        vm.prank(bob);
+        stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
+    }
+
     /// @notice Verifies receiveWithAuthorization reverts when the from address is sanctioned
     /// @dev AddressSanctioned(from): the signer/payer is blocked regardless of who submits
     function test_receiveWithAuthorization_revert_sanctionedFrom(uint256 amount) public {
@@ -77,14 +89,13 @@ contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Verifies receiveWithAuthorization reverts when the to address (which is also msg.sender) is sanctioned
-    /// @dev AddressSanctioned(to/caller): since msg.sender == to, this covers both the caller and recipient check
+    /// @notice Verifies receiveWithAuthorization reverts when the to address is sanctioned
+    /// @dev AddressSanctioned(to): _requireNotSanctioned(to) in _update blocks the recipient regardless of caller
     function test_receiveWithAuthorization_revert_sanctionedTo(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        bytes32 nonce = bytes32(uint256(42));
+        bytes32 nonce = bytes32(uint256(43));
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
         _sanction(bob);
-        // msg.sender (bob) == to (bob); _requireNotSanctioned(msg.sender) fires first
         vm.expectRevert(abi.encodeWithSelector(Sanctionable.AddressSanctioned.selector, bob));
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
