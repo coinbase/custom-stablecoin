@@ -16,9 +16,9 @@ import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
+import {Blocklist} from "./lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
 import {MintRateLimit} from "./lib/MintRateLimit.sol";
-import {Sanctionable} from "./lib/Sanctionable.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
@@ -34,7 +34,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - MINT_RATE_LIMIT_ROLE – can update rate limits for existing minters.
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
-///   - SANCTION_ROLE – can update sanction status for addresses.
+///   - BLOCKLIST_ROLE – can update blocklist status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
 contract Stablecoin is
     Initializable,
@@ -43,14 +43,14 @@ contract Stablecoin is
     ERC20PermitUpgradeable,
     ERC3009Upgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
-    Sanctionable,
+    Blocklist,
     MintRateLimit,
     TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
-    bytes32 public constant SANCTION_ROLE = keccak256("SANCTION_ROLE");
+    bytes32 public constant BLOCKLIST_ROLE = keccak256("BLOCKLIST_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
@@ -132,12 +132,12 @@ contract Stablecoin is
         _configureMinter({minter: minter, limit: limit, interval: interval});
     }
 
-    /// @notice Updates the sanction status for `account`.
+    /// @notice Updates the blocklist status for `account`.
     ///
-    /// @param account    Address to update.
-    /// @param sanctioned Whether the account should be sanctioned.
-    function updateSanctionStatus(address account, bool sanctioned) external onlyRole(SANCTION_ROLE) {
-        _updateSanctionStatus({account: account, sanctioned: sanctioned});
+    /// @param account     Address to update.
+    /// @param blocklisted Whether the account should be blocklisted.
+    function updateBlocklistStatus(address account, bool blocklisted) external onlyRole(BLOCKLIST_ROLE) {
+        _updateBlocklistStatus({account: account, blocklisted: blocklisted});
     }
 
     /// @notice Pauses all token transfers.
@@ -207,7 +207,7 @@ contract Stablecoin is
         return revoked;
     }
 
-    /// @notice Overrides the ERC-20 transfer hook to enforce sanction and pause checks.
+    /// @notice Overrides the ERC-20 transfer hook to enforce blocklist and pause checks.
     ///
     /// @param from  The sender address.
     /// @param to    The recipient address.
@@ -216,9 +216,9 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotSanctioned({account: msg.sender});
-        _requireNotSanctioned({account: from});
-        _requireNotSanctioned({account: to});
+        _requireNotBlocklisted({account: msg.sender});
+        _requireNotBlocklisted({account: from});
+        _requireNotBlocklisted({account: to});
         super._update(from, to, value);
     }
 }
