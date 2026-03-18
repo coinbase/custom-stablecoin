@@ -98,7 +98,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     {
         stablecoin =
             Create2.deploy({amount: 0, salt: salt, bytecode: _bytecode(name, symbol, decimals, stablecoinAdmin)});
-        emit StablecoinDeployed({stablecoin: stablecoin});
+        emit StablecoinDeployed(stablecoin);
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given

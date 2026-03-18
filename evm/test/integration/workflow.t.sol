@@ -215,7 +215,7 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
         // Proxy A exits beacon: override slot set to stablecoinImpl
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddrA).exitBeacon(address(stablecoinImpl));
+        Stablecoin(proxyAddrA).overrideImplementation(address(stablecoinImpl), "");
         assertEq(
             address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(stablecoinImpl)
         );
@@ -248,14 +248,14 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
         // First exit: point at stablecoinImpl
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddr).exitBeacon(address(stablecoinImpl));
+        Stablecoin(proxyAddr).overrideImplementation(address(stablecoinImpl), "");
         assertEq(
             address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(stablecoinImpl)
         );
 
         // Second exit: redirect to impl2
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddr).exitBeacon(address(impl2));
+        Stablecoin(proxyAddr).overrideImplementation(address(impl2), "");
         assertEq(address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(impl2));
 
         // Proxy still functions

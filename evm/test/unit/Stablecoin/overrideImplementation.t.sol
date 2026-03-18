@@ -21,15 +21,15 @@ contract StablecoinExitBeaconTest is StablecoinTest {
             )
         );
         vm.prank(caller);
-        stablecoin.exitBeacon(address(stablecoinImpl));
+        stablecoin.overrideImplementation(address(stablecoinImpl), "");
     }
 
     /// @notice Verifies exitBeacon reverts when newImplementation is the zero address
     /// @dev InvalidImplementation: zero address has no code; must be rejected before the slot write
     function test_exitBeacon_revert_invalidImplementation_zero() public {
-        vm.expectRevert(abi.encodeWithSelector(Stablecoin.InvalidImplementation.selector, address(0)));
+        vm.expectRevert(abi.encodeWithSelector(ERC1967Utils.ERC1967InvalidImplementation.selector, address(0)));
         vm.prank(admin);
-        stablecoin.exitBeacon(address(0));
+        stablecoin.overrideImplementation(address(0), "");
     }
 
     /// @notice Verifies exitBeacon reverts when newImplementation points to an address with no code
@@ -37,9 +37,9 @@ contract StablecoinExitBeaconTest is StablecoinTest {
     function test_exitBeacon_revert_invalidImplementation_noCode(address impl) public {
         vm.assume(impl != address(0));
         vm.assume(impl.code.length == 0);
-        vm.expectRevert(abi.encodeWithSelector(Stablecoin.InvalidImplementation.selector, impl));
+        vm.expectRevert(abi.encodeWithSelector(ERC1967Utils.ERC1967InvalidImplementation.selector, impl));
         vm.prank(admin);
-        stablecoin.exitBeacon(impl);
+        stablecoin.overrideImplementation(impl, "");
     }
 
     // ── Happy paths ───────────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ contract StablecoinExitBeaconTest is StablecoinTest {
     function test_exitBeacon_success_bypassesBeacon() public {
         // Set proxy to use stablecoinImpl directly
         vm.prank(admin);
-        stablecoin.exitBeacon(address(stablecoinImpl));
+        stablecoin.overrideImplementation(address(stablecoinImpl), "");
 
         // The ERC-1967 implementation slot should now be set
         bytes32 slotValue = vm.load(address(proxy), ERC1967Utils.IMPLEMENTATION_SLOT);
@@ -74,6 +74,6 @@ contract StablecoinExitBeaconTest is StablecoinTest {
         vm.expectEmit(true, false, false, false);
         emit IERC1967.Upgraded(address(stablecoinImpl));
         vm.prank(admin);
-        stablecoin.exitBeacon(address(stablecoinImpl));
+        stablecoin.overrideImplementation(address(stablecoinImpl), "");
     }
 }
