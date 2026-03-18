@@ -32,7 +32,7 @@ abstract contract TokenMetadata {
     /// @notice Emitted when the contract-level metadata URI is updated (ERC-7572).
     event ContractURIUpdated();
 
-    /// @notice Thrown when the provided decimals value exceeds `MAX_DECIMALS`.
+    /// @notice Thrown when the provided decimals value is outside the range [`MIN_DECIMALS`, `MAX_DECIMALS`].
     ///
     /// @param decimals The invalid decimals value provided.
     error DecimalsOutOfBounds(uint8 decimals);

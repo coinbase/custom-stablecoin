@@ -8,16 +8,16 @@ contract StorageLocationsTest is Test {
         return keccak256(abi.encode(uint256(keccak256(bytes(namespace))) - 1)) & ~bytes32(uint256(0xff));
     }
 
-    function test_MintAllowanceStorageLocation() public pure {
-        bytes32 expected = 0xe88ac28a8516a992a51aea3dabb181d8896444f55e0d6937cb1897b3b38da700;
-        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.MintAllowance");
-        assertEq(computed, expected, "MintAllowanceStorage slot mismatch");
+    function test_MintRateLimitStorageLocation() public pure {
+        bytes32 expected = 0x7eb699b05d5796f4e90d066d564c9d07f2ed4e5efc8636ffae31415cc65f3a00;
+        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.MintRateLimit");
+        assertEq(computed, expected, "MintRateLimitStorage slot mismatch");
     }
 
-    function test_BlacklistStorageLocation() public pure {
-        bytes32 expected = 0x9b498cdae840f81fb381d9b0d2886f7cc4fa4aea185af7bea0ce66283831de00;
-        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.Blacklist");
-        assertEq(computed, expected, "BlacklistStorage slot mismatch");
+    function test_SanctionStorageLocation() public pure {
+        bytes32 expected = 0x18554b1fc5de6153e5db6e86167c5329c7986180f7c380131540ec57c4270d00;
+        bytes32 computed = _erc7201Slot("coinbase.storage.Stablecoin.Sanction");
+        assertEq(computed, expected, "SanctionStorage slot mismatch");
     }
 
     function test_MetadataStorageLocation() public pure {

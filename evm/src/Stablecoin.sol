@@ -16,25 +16,25 @@ import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
-import {Blacklistable} from "./lib/Blacklistable.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
+import {MintRateLimit} from "./lib/MintRateLimit.sol";
+import {Sanctionable} from "./lib/Sanctionable.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
-import {MintAllowance} from "./lib/MintAllowance.sol";
 
-/// @title Stablecoins
+/// @title Stablecoin
 /// @author Coinbase
 /// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
 ///   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
 ///     transfer with configurable delay.
-///   - MINT_ROLE – can mint tokens up to their configured allowance.
-///     Granting MINT_ROLE auto-configures a default allowance (1,000,000 tokens / 24h).
-///     Revoking MINT_ROLE clears the allowance.
-///   - MINT_ALLOWANCE_ROLE – can update allowances for existing minters.
+///   - MINT_ROLE – can mint tokens up to their configured rate limit.
+///     After granting, a MINT_RATE_LIMIT_ROLE holder must call {configureMinter}
+///     to set the rate limit. Revoking MINT_ROLE clears the rate limit.
+///   - MINT_RATE_LIMIT_ROLE – can update rate limits for existing minters.
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
-///   - BLACKLIST_ROLE – can blacklist/unblacklist addresses.
+///   - SANCTION_ROLE – can update sanction status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
 contract Stablecoin is
     Initializable,
@@ -43,14 +43,14 @@ contract Stablecoin is
     ERC20PermitUpgradeable,
     ERC3009Upgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
-    Blacklistable,
-    MintAllowance,
+    Sanctionable,
+    MintRateLimit,
     TokenMetadata
 {
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
-    bytes32 public constant MINT_ALLOWANCE_ROLE = keccak256("MINT_ALLOWANCE_ROLE");
-    bytes32 public constant BLACKLIST_ROLE = keccak256("BLACKLIST_ROLE");
+    bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
+    bytes32 public constant SANCTION_ROLE = keccak256("SANCTION_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
@@ -85,7 +85,7 @@ contract Stablecoin is
     /*                     EXTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Initializes the stablecoin with the given admin, delay, name, symbol, decimals, and role assignments.
+    /// @notice Initializes the stablecoin with the given name, symbol, decimals, and admin.
     ///
     /// @param name          Token name.
     /// @param symbol        Token symbol.
@@ -107,7 +107,7 @@ contract Stablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        _consumeMintAllowance({minter: msg.sender, amount: amount});
+        _consumeMintLimit({minter: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
@@ -124,29 +124,20 @@ contract Stablecoin is
     ///
     /// @dev Cannot add or remove minters; use role management for that.
     ///
-    /// @param minter       Minter address to update.
-    /// @param maxAllowance New maximum allowance per interval.
-    /// @param interval     Replenishment interval in seconds.
-    function configureMinter(address minter, uint256 maxAllowance, uint256 interval)
-        external
-        onlyRole(MINT_ALLOWANCE_ROLE)
-    {
-        _checkRole(MINT_ROLE, minter);
-        _configureMinter(minter, maxAllowance, interval);
+    /// @param minter   Minter address to update.
+    /// @param limit    New maximum mint capacity.
+    /// @param interval Replenishment interval in seconds.
+    function configureMinter(address minter, uint256 limit, uint256 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
+        _checkRole({role: MINT_ROLE, account: minter});
+        _configureMinter({minter: minter, limit: limit, interval: interval});
     }
 
-    /// @notice Adds `account` to the blacklist, preventing it from transferring tokens.
+    /// @notice Updates the sanction status for `account`.
     ///
-    /// @param account Address to blacklist.
-    function blacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        _blacklist(account);
-    }
-
-    /// @notice Removes `account` from the blacklist.
-    ///
-    /// @param account Address to unblacklist.
-    function unBlacklist(address account) external onlyRole(BLACKLIST_ROLE) {
-        _unBlacklist(account);
+    /// @param account    Address to update.
+    /// @param sanctioned Whether the account should be sanctioned.
+    function updateSanctionStatus(address account, bool sanctioned) external onlyRole(SANCTION_ROLE) {
+        _updateSanctionStatus({account: account, sanctioned: sanctioned});
     }
 
     /// @notice Pauses all token transfers.
@@ -177,9 +168,6 @@ contract Stablecoin is
     /// @param newImplementation The implementation address to delegate to. Must be a deployed
     ///        contract (non-zero address with code).
     function exitBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // Reject the zero address — exiting the beacon is one-way, clearing is not supported.
-        if (newImplementation == address(0)) revert InvalidImplementation({implementation: newImplementation});
-
         // Ensure the target is a deployed contract, not an EOA or empty address.
         if (newImplementation.code.length == 0) revert InvalidImplementation({implementation: newImplementation});
 
@@ -205,7 +193,7 @@ contract Stablecoin is
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Overrides role revoking to remove the mint allowance when `MINT_ROLE` is revoked.
+    /// @notice Overrides role revoking to remove the mint rate limit when `MINT_ROLE` is revoked.
     ///
     /// @param role    The role being revoked.
     /// @param account The account losing the role.
@@ -219,7 +207,7 @@ contract Stablecoin is
         return revoked;
     }
 
-    /// @notice Overrides the ERC-20 transfer hook to enforce blacklist and pause checks.
+    /// @notice Overrides the ERC-20 transfer hook to enforce sanction and pause checks.
     ///
     /// @param from  The sender address.
     /// @param to    The recipient address.
@@ -228,9 +216,9 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlacklisted({account: msg.sender});
-        _requireNotBlacklisted({account: from});
-        _requireNotBlacklisted({account: to});
+        _requireNotSanctioned({account: msg.sender});
+        _requireNotSanctioned({account: from});
+        _requireNotSanctioned({account: to});
         super._update(from, to, value);
     }
 }
