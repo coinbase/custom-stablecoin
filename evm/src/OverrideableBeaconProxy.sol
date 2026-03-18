@@ -24,15 +24,12 @@ contract OverrideableBeaconProxy is BeaconProxy {
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
     constructor(address beacon, bytes memory data) payable BeaconProxy(beacon, data) {}
 
-    /// @notice Returns the active implementation address.
+    /// @notice Returns the beacon address.
     ///
-    /// @dev Returns the ERC-1967 implementation slot if set (opt-out override),
-    /// otherwise falls back to querying the beacon.
+    /// @dev Returns the address stored in the ERC-1967 beacon slot.
     ///
-    /// @return The implementation address to delegate calls to.
-    function _implementation() internal view override returns (address) {
-        address implementationOverride = ERC1967Utils.getImplementation();
-        if (implementationOverride != address(0)) return implementationOverride;
-        return IBeacon(_getBeacon()).implementation();
+    /// @return The current beacon address.
+    function _getBeacon() internal view override returns (address) {
+        return ERC1967Utils.getBeacon();
     }
 }
