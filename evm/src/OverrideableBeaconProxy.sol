@@ -31,8 +31,8 @@ contract OverrideableBeaconProxy is BeaconProxy {
     ///
     /// @return The implementation address to delegate calls to.
     function _implementation() internal view override returns (address) {
-        address directImpl = ERC1967Utils.getImplementation();
-        if (directImpl != address(0)) return directImpl;
+        address implementationOverride = ERC1967Utils.getImplementation();
+        if (implementationOverride != address(0)) return implementationOverride;
         return IBeacon(_getBeacon()).implementation();
     }
 }

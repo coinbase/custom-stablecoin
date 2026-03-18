@@ -51,8 +51,8 @@ contract Stablecoin is
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
     bytes32 public constant BLOCKLIST_ROLE = keccak256("BLOCKLIST_ROLE");
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
     /// @notice Emitted when tokens are minted.
     ///
@@ -66,11 +66,6 @@ contract Stablecoin is
     /// @param burner The address that burned tokens.
     /// @param amount The number of tokens burned.
     event Burned(address indexed burner, uint256 amount);
-
-    /// @notice Thrown when the provided implementation address has no code or is the zero address.
-    ///
-    /// @param implementation The invalid implementation address.
-    error InvalidImplementation(address implementation);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
@@ -140,6 +135,13 @@ contract Stablecoin is
         _updateBlocklistStatus({account: account, blocklisted: blocklisted});
     }
 
+    /// @notice Updates the contract-level metadata URI (ERC-7572).
+    ///
+    /// @param newContractURI The new metadata URI.
+    function updateContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
+        _updateContractURI(newContractURI);
+    }
+
     /// @notice Pauses all token transfers.
     function pause() external onlyRole(PAUSE_ROLE) {
         _pause();
@@ -150,32 +152,21 @@ contract Stablecoin is
         _unpause();
     }
 
-    /// @notice Updates the contract-level metadata URI (ERC-7572).
-    ///
-    /// @param newContractURI The new metadata URI.
-    function updateContractURI(string calldata newContractURI) external onlyRole(METADATA_ROLE) {
-        _updateContractURI(newContractURI);
-    }
-
-    /// @notice Permanently opts this proxy out of the shared beacon by writing a direct
-    /// implementation address into the ERC-1967 implementation slot.
+    /// @notice Overrides the shared beacon with a new implementation for this stablecoin.
     ///
     /// @dev After this call, the proxy's `_implementation()` returns `newImplementation`
-    /// directly instead of querying the beacon. This is a one-way operation — once set,
-    /// the proxy no longer follows beacon upgrades. The admin can still call this again
-    /// to point at a different implementation, but cannot return to beacon behavior.
+    /// directly instead of querying the beacon. It is possible to reverse this by unsetting
+    /// ERC1967 implementation slot override, but this is up to the new implementation to enable.
+    /// Once overriden, the proxy no longer follows beacon upgrades.
     ///
     /// @param newImplementation The implementation address to delegate to. Must be a deployed
     ///        contract (non-zero address with code).
-    function exitBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // Ensure the target is a deployed contract, not an EOA or empty address.
-        if (newImplementation.code.length == 0) revert InvalidImplementation({implementation: newImplementation});
-
-        // Write directly to the ERC-1967 implementation slot. Once set, the proxy's
-        // _implementation() will return this address, bypassing the beacon entirely.
-        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = newImplementation;
-
-        emit IERC1967.Upgraded(newImplementation);
+    /// @param data              Optional data to forward to the implementation.
+    function overrideImplementation(address newImplementation, bytes calldata data)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        ERC1967Utils.upgradeToAndCall(newImplementation, data);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
