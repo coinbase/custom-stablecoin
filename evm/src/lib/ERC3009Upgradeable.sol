@@ -243,8 +243,8 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param signature  Packed signature over the EIP-712 cancel authorization struct.
     function cancelAuthorization(address authorizer, bytes32 nonce, bytes memory signature) public {
         bytes32 structHash = keccak256(abi.encode(CANCEL_AUTHORIZATION_TYPEHASH, authorizer, nonce));
-        _consumeAuthorization(authorizer, nonce, structHash, signature);
-        emit AuthorizationCanceled(authorizer, nonce);
+        _consumeAuthorization({authorizer: authorizer, nonce: nonce, structHash: structHash, signature: signature});
+        emit AuthorizationCanceled({authorizer: authorizer, nonce: nonce});
     }
 
     /// @notice Returns whether a given authorization nonce has been used or canceled.
@@ -291,8 +291,8 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
 
         // Validate authorization signature and nonce
         bytes32 structHash = keccak256(abi.encode(typehash, from, to, value, validAfter, validBefore, nonce));
-        _consumeAuthorization(from, nonce, structHash, signature);
-        emit AuthorizationUsed(from, nonce);
+        _consumeAuthorization({authorizer: from, nonce: nonce, structHash: structHash, signature: signature});
+        emit AuthorizationUsed({authorizer: from, nonce: nonce});
 
         // Transfer tokens
         _transfer(from, to, value);
@@ -310,7 +310,9 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         ERC3009Layout storage $ = _getERC3009Layout();
 
         // Check authorization not yet consumed
-        if ($.authorizationState[authorizer][nonce]) revert AuthorizationAlreadyUsed(authorizer, nonce);
+        if ($.authorizationState[authorizer][nonce]) {
+            revert AuthorizationAlreadyUsed({authorizer: authorizer, nonce: nonce});
+        }
 
         // Validate signature over authorization
         bytes32 digest = _hashTypedDataV4(structHash);
