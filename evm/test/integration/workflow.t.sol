@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
+import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {StablecoinFactory} from "src/StablecoinFactory.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
@@ -205,32 +206,29 @@ contract StablecoinWorkflowTest is StablecoinTest {
         assertEq(Stablecoin(proxyAddrB).name(), TOKEN_NAME);
     }
 
-    /// @notice Verifies that a proxy that has called exitBeacon is not affected by subsequent beacon upgrades
-    /// @dev exitBeacon isolation: proxy A exits → upgrade beacon → proxy A still uses old impl; proxy B follows new impl
-    function test_workflow_exitBeaconDecouplesFromBeaconUpgrade() public {
+    /// @notice Verifies that a proxy pointed at a new beacon is not affected by upgrades to the original beacon
+    /// @dev updateBeaconToAndCall isolation: proxy A switches beacon → upgrade original beacon → proxy A unaffected; proxy B follows
+    function test_workflow_updateBeaconDecouplesFromOriginalBeacon() public {
         vm.prank(deployer);
         address proxyAddrA = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
         vm.prank(deployer);
         address proxyAddrB = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_B);
 
-        // Proxy A exits beacon: override slot set to stablecoinImpl
+        // Proxy A switches to a separate beacon
+        MockBeacon beaconA = new MockBeacon(address(stablecoinImpl));
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddrA).overrideImplementation(address(stablecoinImpl), "");
-        assertEq(
-            address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(stablecoinImpl)
-        );
+        Stablecoin(proxyAddrA).updateBeaconToAndCall(address(beaconA), "");
+        assertEq(address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.BEACON_SLOT)))), address(beaconA));
 
-        // Upgrade beacon to newImpl
+        // Upgrade the original beacon to newImpl
         Stablecoin newImpl = new Stablecoin();
         beacon.upgradeTo(address(newImpl));
 
-        // Proxy A: override slot still points at stablecoinImpl (decoupled from beacon)
-        assertEq(
-            address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(stablecoinImpl)
-        );
+        // Proxy A: beacon slot still points at beaconA (decoupled from original beacon)
+        assertEq(address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.BEACON_SLOT)))), address(beaconA));
 
-        // Proxy B: still follows beacon → newImpl
-        assertEq(address(uint160(uint256(vm.load(proxyAddrB, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(0));
+        // Proxy B: beacon slot unchanged, still follows original beacon → newImpl
+        assertEq(address(uint160(uint256(vm.load(proxyAddrB, ERC1967Utils.BEACON_SLOT)))), address(beacon));
         assertEq(beacon.implementation(), address(newImpl));
 
         // Both still function
@@ -238,25 +236,25 @@ contract StablecoinWorkflowTest is StablecoinTest {
         assertEq(Stablecoin(proxyAddrB).name(), TOKEN_NAME);
     }
 
-    /// @notice Verifies that exitBeacon can be called multiple times to point at successive implementations
-    /// @dev Re-override: admin can call exitBeacon again to switch to another implementation
-    function test_workflow_exitBeaconCanBeRedirected() public {
+    /// @notice Verifies that updateBeaconToAndCall can be called multiple times to redirect to successive beacons
+    /// @dev Re-redirect: admin can call updateBeaconToAndCall again to switch to another beacon
+    function test_workflow_updateBeaconCanBeRedirected() public {
         vm.prank(deployer);
         address proxyAddr = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
 
         Stablecoin impl2 = new Stablecoin();
 
-        // First exit: point at stablecoinImpl
+        // First redirect: point at beaconA (wrapping stablecoinImpl)
+        MockBeacon beaconA = new MockBeacon(address(stablecoinImpl));
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddr).overrideImplementation(address(stablecoinImpl), "");
-        assertEq(
-            address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(stablecoinImpl)
-        );
+        Stablecoin(proxyAddr).updateBeaconToAndCall(address(beaconA), "");
+        assertEq(address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.BEACON_SLOT)))), address(beaconA));
 
-        // Second exit: redirect to impl2
+        // Second redirect: switch to beaconB (wrapping impl2)
+        MockBeacon beaconB = new MockBeacon(address(impl2));
         vm.prank(stablecoinAdmin);
-        Stablecoin(proxyAddr).overrideImplementation(address(impl2), "");
-        assertEq(address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(impl2));
+        Stablecoin(proxyAddr).updateBeaconToAndCall(address(beaconB), "");
+        assertEq(address(uint160(uint256(vm.load(proxyAddr, ERC1967Utils.BEACON_SLOT)))), address(beaconB));
 
         // Proxy still functions
         assertEq(Stablecoin(proxyAddr).name(), TOKEN_NAME);

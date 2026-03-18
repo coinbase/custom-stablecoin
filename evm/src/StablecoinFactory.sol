@@ -8,12 +8,12 @@ import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-import {OverrideableBeaconProxy} from "./OverrideableBeaconProxy.sol";
+import {MutableBeaconProxy} from "./MutableBeaconProxy.sol";
 import {Stablecoin} from "./Stablecoin.sol";
 
 /// @title StablecoinFactory
 /// @author Coinbase
-/// @notice UUPS-upgradeable factory that deploys {OverrideableBeaconProxy} proxies pointing to a shared {Stablecoin} implementation.
+/// @notice UUPS-upgradeable factory that deploys {MutableBeaconProxy} proxies pointing to a shared {Stablecoin} implementation.
 ///
 /// @dev The beacon is set once during initialization and cannot be changed.
 ///
@@ -79,7 +79,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         _grantRole({role: DEPLOYER_ROLE, account: deployer});
     }
 
-    /// @notice Deploys a new {Stablecoin} behind an {OverrideableBeaconProxy} using CREATE2.
+    /// @notice Deploys a new {Stablecoin} behind an {MutableBeaconProxy} using CREATE2.
     ///
     /// @dev Uses `Create2.deploy` so the factory's address is part of the CREATE2 derivation,
     /// ensuring only this factory can deploy proxies to the predicted addresses.
@@ -143,7 +143,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     /*                     PRIVATE FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Builds the full creation bytecode for an {OverrideableBeaconProxy} that
+    /// @notice Builds the full creation bytecode for an {MutableBeaconProxy} that
     /// initializes a {Stablecoin} with the given parameters.
     function _bytecode(string calldata name, string calldata symbol, uint8 decimals, address stablecoinAdmin)
         private
@@ -151,7 +151,7 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
         returns (bytes memory)
     {
         bytes memory data = abi.encodeCall(Stablecoin.initialize, (name, symbol, decimals, stablecoinAdmin));
-        return abi.encodePacked(type(OverrideableBeaconProxy).creationCode, abi.encode(beacon(), data));
+        return abi.encodePacked(type(MutableBeaconProxy).creationCode, abi.encode(beacon(), data));
     }
 
     /// @notice Returns a storage pointer to the ERC-7201 namespaced factory layout struct.

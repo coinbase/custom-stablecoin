@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 
 import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
-import {OverrideableBeaconProxy} from "src/OverrideableBeaconProxy.sol";
+import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 /// @dev Base test contract for Stablecoin. Deploys a full proxy stack and seeds actors
@@ -43,7 +43,7 @@ contract StablecoinTest is Test {
     Stablecoin internal stablecoin;
     Stablecoin internal stablecoinImpl;
     MockBeacon internal beacon;
-    OverrideableBeaconProxy internal proxy;
+    MutableBeaconProxy internal proxy;
 
     // ── Defaults ─────────────────────────────────────────────────────────────────────────
     string internal constant TOKEN_NAME = "Test USD";
@@ -64,7 +64,7 @@ contract StablecoinTest is Test {
 
         // Deploy proxy and initialize in one step via constructor calldata
         bytes memory initData = abi.encodeCall(Stablecoin.initialize, (TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, admin));
-        proxy = new OverrideableBeaconProxy(address(beacon), initData);
+        proxy = new MutableBeaconProxy(address(beacon), initData);
         stablecoin = Stablecoin(address(proxy));
 
         // Labels

@@ -152,21 +152,16 @@ contract Stablecoin is
         _unpause();
     }
 
-    /// @notice Overrides the shared beacon with a new implementation for this stablecoin.
+    /// @notice Upgrades the beacon for this stablecoin to a new beacon address.
     ///
-    /// @dev After this call, the proxy's `_implementation()` returns `newImplementation`
-    /// directly instead of querying the beacon. It is possible to reverse this by unsetting
-    /// ERC1967 implementation slot override, but this is up to the new implementation to enable.
-    /// Once overriden, the proxy no longer follows beacon upgrades.
+    /// @dev Calls `ERC1967Utils.upgradeBeaconToAndCall`, which updates the ERC-1967 beacon slot
+    /// to point at `newBeacon` and optionally forwards `data` via delegatecall to the new
+    /// implementation.
     ///
-    /// @param newImplementation The implementation address to delegate to. Must be a deployed
-    ///        contract (non-zero address with code).
-    /// @param data              Optional data to forward to the implementation.
-    function overrideImplementation(address newImplementation, bytes calldata data)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        ERC1967Utils.upgradeToAndCall(newImplementation, data);
+    /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
+    /// @param data      Optional calldata to forward to the new implementation via delegatecall.
+    function updateBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        ERC1967Utils.upgradeBeaconToAndCall(newBeacon, data);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

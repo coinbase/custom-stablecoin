@@ -5,7 +5,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 
-/// @title OverrideableBeaconProxy
+/// @title MutableBeaconProxy
 /// @author Coinbase
 /// @notice A minimal {BeaconProxy} that supports a direct implementation
 /// override via the ERC-1967 implementation slot, bypassing the beacon
@@ -17,22 +17,19 @@ import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 ///
 /// The override is set from the implementation side (via delegatecall) rather
 /// than through proxy-level admin functions, keeping the proxy minimal.
-contract OverrideableBeaconProxy is BeaconProxy {
+contract MutableBeaconProxy is BeaconProxy {
     /// @notice Deploys the proxy pointing at `beacon`.
     ///
     /// @param beacon The beacon contract supplying the shared implementation address.
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
     constructor(address beacon, bytes memory data) payable BeaconProxy(beacon, data) {}
 
-    /// @notice Returns the active implementation address.
+    /// @notice Returns the beacon address.
     ///
-    /// @dev Returns the ERC-1967 implementation slot if set (opt-out override),
-    /// otherwise falls back to querying the beacon.
+    /// @dev Returns the address stored in the ERC-1967 beacon slot.
     ///
-    /// @return The implementation address to delegate calls to.
-    function _implementation() internal view override returns (address) {
-        address implementationOverride = ERC1967Utils.getImplementation();
-        if (implementationOverride != address(0)) return implementationOverride;
-        return IBeacon(_getBeacon()).implementation();
+    /// @return The current beacon address.
+    function _getBeacon() internal view override returns (address) {
+        return ERC1967Utils.getBeacon();
     }
 }
