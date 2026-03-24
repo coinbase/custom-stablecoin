@@ -4,8 +4,9 @@ pragma solidity 0.8.30;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {Blocklist} from "src/lib/Blocklist.sol";
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinBurnTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ contract StablecoinBurnTest is StablecoinTest {
     function test_burn_success_emitsBurned(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
         vm.expectEmit(true, false, false, true);
-        emit Stablecoin.Burned(burner, amount);
+        emit Stablecoin.Burned({burner: burner, amount: amount});
         vm.prank(burner);
         stablecoin.burn(amount);
     }

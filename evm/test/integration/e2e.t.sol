@@ -3,10 +3,11 @@ pragma solidity 0.8.30;
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
-import {StablecoinFactory} from "src/StablecoinFactory.sol";
-import {Stablecoin} from "src/Stablecoin.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
+import {Stablecoin} from "src/Stablecoin.sol";
+import {StablecoinFactory} from "src/StablecoinFactory.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev End-to-end integration tests for full user journeys across single and multiple actors.
 /// Each test asserts intermediate state at every step, not just the final outcome.
@@ -128,8 +129,8 @@ contract StablecoinE2ETest is StablecoinTest {
         address localAdmin = makeAddr("localAdmin");
 
         // Deploy a factory backed by the same beacon
-        StablecoinFactory factoryImpl = new StablecoinFactory();
-        bytes memory initData = abi.encodeCall(StablecoinFactory.initialize, (admin, 0, address(beacon), localDeployer));
+        StablecoinFactory factoryImpl = new StablecoinFactory(address(beacon));
+        bytes memory initData = abi.encodeCall(StablecoinFactory.initialize, (admin, 0, localDeployer));
         StablecoinFactory localFactory = StablecoinFactory(address(new ERC1967Proxy(address(factoryImpl), initData)));
 
         // Deploy two stablecoins

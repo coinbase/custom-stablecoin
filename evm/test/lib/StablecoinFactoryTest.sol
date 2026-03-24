@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 import {StablecoinFactory} from "src/StablecoinFactory.sol";
+
+import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 
 /// @dev Base test contract for StablecoinFactory. Deploys a UUPS-proxied factory backed by a
 /// MockBeacon pointing at the Stablecoin implementation. All factory test files inherit from this.
@@ -36,9 +36,8 @@ contract StablecoinFactoryTest is Test {
         beacon = new MockBeacon(address(stablecoinImpl));
 
         // Wrap factory in a UUPS proxy and initialize
-        StablecoinFactory factoryImpl = new StablecoinFactory();
-        bytes memory factoryInitData =
-            abi.encodeCall(StablecoinFactory.initialize, (admin, ADMIN_DELAY, address(beacon), deployer));
+        StablecoinFactory factoryImpl = new StablecoinFactory(address(beacon));
+        bytes memory factoryInitData = abi.encodeCall(StablecoinFactory.initialize, (admin, ADMIN_DELAY, deployer));
         ERC1967Proxy factoryProxy = new ERC1967Proxy(address(factoryImpl), factoryInitData);
         factory = StablecoinFactory(address(factoryProxy));
 

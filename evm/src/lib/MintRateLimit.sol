@@ -21,10 +21,11 @@ abstract contract MintRateLimit {
         uint256 limit;
         /// @dev The current remaining mint capacity.
         uint256 remaining;
-        /// @dev The replenishment interval in seconds. Packed with `lastReplenished`.
+        /// @dev The replenishment interval in seconds. Packed with `lastConsumed`.
         uint40 interval;
-        /// @dev The unix timestamp (seconds) of the last replenishment. Packed with `interval`.
-        uint40 lastReplenished;
+        /// @dev The unix timestamp (seconds) used as the replenishment anchor; updated on every
+        ///      consumption and initialised to the configuration time. Packed with `interval`.
+        uint40 lastConsumed;
     }
 
     /// @notice Storage layout for mint rate limits.
@@ -47,7 +48,7 @@ abstract contract MintRateLimit {
     /// @param minter   The minter address.
     /// @param limit    The new maximum mint capacity.
     /// @param interval The new replenishment interval in seconds.
-    event MinterConfigured(address indexed minter, uint256 limit, uint256 interval);
+    event MinterConfigured(address indexed minter, uint256 limit, uint40 interval);
 
     /// @notice Emitted when a minter is removed.
     ///
@@ -78,6 +79,11 @@ abstract contract MintRateLimit {
     /// @notice Thrown when a minter configuration is invalid (zero limit or interval).
     error InvalidMinterConfig();
 
+    /// @notice Thrown when a minter attempts to mint without an active rate-limit configuration.
+    ///
+    /// @param minter The minter address that has no configuration.
+    error MinterNotConfigured(address minter);
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -90,7 +96,7 @@ abstract contract MintRateLimit {
     function currentMintLimit(address minter) public view virtual returns (uint256) {
         MinterConfig storage config = _getMintRateLimitLayout().minters[minter];
 
-        uint256 elapsed = block.timestamp - config.lastReplenished;
+        uint256 elapsed = block.timestamp - config.lastConsumed;
         // Restores a percentage of the limit based on the elapsed time and interval.
         // Example: limit = 100, interval = 2 hours, elapsed time = 1 hour then the amount = 50 (50% of the limit)
         uint256 replenishmentAmount = Math.mulDiv(elapsed, config.limit, config.interval);
@@ -110,6 +116,8 @@ abstract contract MintRateLimit {
     function _consumeMintLimit(address minter, uint256 amount) internal {
         MinterConfig storage config = _getMintRateLimitLayout().minters[minter];
 
+        if (config.interval == 0) revert MinterNotConfigured(minter);
+
         // Get the current mint limit at this moment.
         uint256 currentMintLimit_ = currentMintLimit(minter);
         if (amount > currentMintLimit_) {
@@ -120,11 +128,12 @@ abstract contract MintRateLimit {
         if (currentMintLimit_ > config.remaining) {
             uint256 replenished = currentMintLimit_ - config.remaining;
             config.remaining = currentMintLimit_;
-            config.lastReplenished = uint40(block.timestamp);
             emit MintLimitReplenished({minter: minter, amount: replenished, remaining: config.remaining});
         }
 
         config.remaining -= amount;
+        config.lastConsumed = uint40(block.timestamp);
+
         emit MintLimitConsumed({minter: minter, amount: amount, remaining: config.remaining});
     }
 
@@ -133,11 +142,10 @@ abstract contract MintRateLimit {
     /// @param minter   The minter address to configure.
     /// @param limit    The maximum mint capacity the minter may accumulate.
     /// @param interval The replenishment interval in seconds.
-    function _configureMinter(address minter, uint256 limit, uint256 interval) internal {
+    function _configureMinter(address minter, uint256 limit, uint40 interval) internal {
         if (limit == 0 || interval == 0) revert InvalidMinterConfig();
-        _getMintRateLimitLayout().minters[minter] = MinterConfig({
-            limit: limit, remaining: limit, interval: uint40(interval), lastReplenished: uint40(block.timestamp)
-        });
+        _getMintRateLimitLayout().minters[minter] =
+            MinterConfig({limit: limit, remaining: limit, interval: interval, lastConsumed: uint40(block.timestamp)});
         emit MinterConfigured({minter: minter, limit: limit, interval: interval});
     }
 

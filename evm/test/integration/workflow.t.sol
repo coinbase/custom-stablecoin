@@ -4,11 +4,12 @@ pragma solidity 0.8.30;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
+import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {Stablecoin} from "src/Stablecoin.sol";
+import {StablecoinFactory} from "src/StablecoinFactory.sol";
+
 import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
-import {StablecoinFactory} from "src/StablecoinFactory.sol";
-import {Stablecoin} from "src/Stablecoin.sol";
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
 
 /// @dev Integration tests for multi-step admin workflows, permission choreography, and beacon
 /// upgrade / exitBeacon scenarios. Extends StablecoinTest (fully configured stablecoin) and
@@ -27,9 +28,8 @@ contract StablecoinWorkflowTest is StablecoinTest {
         super.setUp();
 
         // Deploy a UUPS-proxied factory backed by the same beacon as the stablecoin
-        StablecoinFactory factoryImpl = new StablecoinFactory();
-        bytes memory factoryInitData =
-            abi.encodeCall(StablecoinFactory.initialize, (admin, ADMIN_DELAY, address(beacon), deployer));
+        StablecoinFactory factoryImpl = new StablecoinFactory(address(beacon));
+        bytes memory factoryInitData = abi.encodeCall(StablecoinFactory.initialize, (admin, ADMIN_DELAY, deployer));
         ERC1967Proxy factoryProxy = new ERC1967Proxy(address(factoryImpl), factoryInitData);
         factory = StablecoinFactory(address(factoryProxy));
 
@@ -74,9 +74,9 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
     /// @notice Verifies the full minter lifecycle: grant → configure → mint → revoke clears config
     /// @dev Integration: revoking MINT_ROLE must zero out the minter's rate-limit and emit MinterRemoved
-    function test_workflow_minterLifecycle(uint256 limit, uint256 interval) public {
+    function test_workflow_minterLifecycle(uint256 limit, uint40 interval) public {
         limit = bound(limit, 1, MINT_LIMIT);
-        interval = bound(interval, 1, uint256(type(uint40).max));
+        vm.assume(interval != 0);
 
         address minter2 = makeAddr("minter2");
 
@@ -95,7 +95,7 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
         // Revoke MINT_ROLE — must emit MinterRemoved and clear config
         vm.expectEmit(true, false, false, false);
-        emit MintRateLimit.MinterRemoved(minter2);
+        emit MintRateLimit.MinterRemoved({minter: minter2});
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter2);
         vm.stopPrank();
@@ -265,14 +265,14 @@ contract StablecoinWorkflowTest is StablecoinTest {
     /// @notice Verifies the factory can be upgraded via UUPS while preserving the beacon address
     /// @dev UUPS: DEFAULT_ADMIN upgrades factory impl; beacon() must return the same address after upgrade
     function test_workflow_factoryUUPSUpgradePreservesBeacon() public {
-        address beaconBefore = factory.beacon();
+        address beaconBefore = factory.BEACON();
 
         // Deploy a new factory implementation and upgrade
-        StablecoinFactory newFactoryImpl = new StablecoinFactory();
+        StablecoinFactory newFactoryImpl = new StablecoinFactory(address(beacon));
         vm.prank(admin);
         factory.upgradeToAndCall(address(newFactoryImpl), "");
 
         // Beacon address is preserved in proxy storage across impl upgrade
-        assertEq(factory.beacon(), beaconBefore);
+        assertEq(factory.BEACON(), beaconBefore);
     }
 }

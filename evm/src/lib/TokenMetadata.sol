@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+
 /// @title TokenMetadata
 /// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for custom stablecoin metadata.
-abstract contract TokenMetadata {
+abstract contract TokenMetadata is Initializable {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -22,7 +24,7 @@ abstract contract TokenMetadata {
     bytes32 private constant METADATA_STORAGE_LOCATION =
         0xa3459737885856abeeb2a475f81a26ad8d8ccc56bd90faa293afd170849e1600;
 
-    uint8 internal constant MIN_DECIMALS = 2;
+    uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 18;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -65,7 +67,7 @@ abstract contract TokenMetadata {
     /// @notice Sets the token's decimal places (one-time only).
     ///
     /// @param value The number of decimals; must be between `MIN_DECIMALS` and `MAX_DECIMALS` inclusive.
-    function _initializeDecimals(uint8 value) internal {
+    function _initializeDecimals(uint8 value) internal onlyInitializing {
         MetadataLayout storage $ = _getMetadataLayout();
         if ($.decimals != 0) revert DecimalsAlreadyInitialized();
         if (value < MIN_DECIMALS || value > MAX_DECIMALS) revert DecimalsOutOfBounds({decimals: value});

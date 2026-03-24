@@ -3,8 +3,9 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Handler contract for stateful fuzzing. Restricts all operations to known actors so that
 /// ghost-balance and ghost-blocklist state remain consistent with on-chain state throughout the run.
@@ -35,10 +36,10 @@ contract StablecoinHandler is Test {
     // ── Ghost state ───────────────────────────────────────────────────────────────────────
 
     /// @dev Records each actor's balance at the moment they were most recently blocklisted.
-    mapping(address => uint256) public balanceAtBlocklistTime;
+    mapping(address account => uint256 balance) public balanceAtBlocklistTime;
 
     /// @dev True when the actor is currently blocklisted according to ghost state.
-    mapping(address => bool) public ghostBlocklisted;
+    mapping(address account => bool blocklisted) public ghostBlocklisted;
 
     /// @dev ERC-3009 nonces that alice has successfully consumed on-chain.
     bytes32[] internal _aliceUsedNonces;

@@ -6,9 +6,9 @@ import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 contract StablecoinCurrentMintLimitTest is StablecoinTest {
     // ── Happy paths (no reverts — this is a pure view) ────────────────────────────────────
 
-    /// @notice Verifies currentMintLimit panics for an address with no minter configuration
+    /// @notice Verifies currentMintLimit panics with division-by-zero for an unconfigured address
     /// @dev Edge case: unconfigured minter has interval=0; Math.mulDiv(elapsed, 0, 0) triggers Panic(0x12)
-    function test_currentMintLimit_returnsZeroForUnregisteredMinter(address target) public {
+    function test_currentMintLimit_revert_divisionByZero_whenNotConfigured(address target) public {
         vm.assume(target != minter);
         // Unregistered minter has interval=0; Math.mulDiv(elapsed, 0, 0) = 0/0 → Panic(divisionByZero)
         vm.expectRevert(abi.encodeWithSelector(bytes4(0x4e487b71), uint256(18)));
@@ -17,7 +17,7 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit returns the full configured limit immediately after configuration
     /// @dev State: remaining == limit at configuration time; no elapsed time means no additional replenishment
-    function test_currentMintLimit_returnsFullLimitAtStart(uint256 limit) public {
+    function test_currentMintLimit_success_returnsFullLimitAtStart(uint256 limit) public {
         limit = bound(limit, 1, type(uint128).max);
         address minter2 = makeAddr("minter2");
         vm.startPrank(admin);
@@ -30,9 +30,9 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit reflects linear replenishment proportional to elapsed time
     /// @dev Replenishment: amount = Math.mulDiv(elapsed, limit, interval); partial interval yields partial refill
-    function test_currentMintLimit_replenishesOverTime(uint256 limit, uint256 interval, uint256 elapsed) public {
+    function test_currentMintLimit_success_replenishesOverTime(uint256 limit, uint40 interval, uint256 elapsed) public {
         limit = bound(limit, 1e6, 1e18);
-        interval = bound(interval, 1, uint256(type(uint40).max));
+        vm.assume(interval != 0);
         elapsed = bound(elapsed, 1, uint256(type(uint40).max));
 
         address minter2 = makeAddr("minter2");
@@ -66,9 +66,9 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit never exceeds the configured limit regardless of elapsed time
     /// @dev Cap invariant: Math.min(remaining + replenishment, limit) must always hold
-    function test_currentMintLimit_capsAtLimit(uint256 limit, uint256 interval, uint256 elapsed) public {
+    function test_currentMintLimit_success_capsAtLimit(uint256 limit, uint40 interval, uint256 elapsed) public {
         limit = bound(limit, 1, type(uint128).max);
-        interval = bound(interval, 1, uint256(type(uint40).max));
+        vm.assume(interval != 0);
         elapsed = bound(elapsed, 0, uint256(type(uint40).max));
 
         address minter2 = makeAddr("minter2");
@@ -84,7 +84,7 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit decreases by exactly the minted amount after a mint
     /// @dev State: remaining capacity must reflect the consumed amount; replenishment is unchanged
-    function test_currentMintLimit_decreasesAfterMint(uint256 amount) public {
+    function test_currentMintLimit_success_decreasesAfterMint(uint256 amount) public {
         uint256 limitBefore = stablecoin.currentMintLimit(minter);
         amount = bound(amount, 1, limitBefore);
         _mint(alice, amount);

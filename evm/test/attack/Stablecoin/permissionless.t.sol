@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Attack tests for permissionless entry points. transferWithAuthorization and
 /// cancelAuthorization have no caller restriction — any address may submit them.

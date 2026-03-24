@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Blocklist} from "src/lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Tests for ERC-3009 receiveWithAuthorization. This is a strict superset of
@@ -121,7 +122,7 @@ contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
         amount = bound(amount, 1, INITIAL_MINT);
         bytes memory sig = _signReceiveAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
         vm.expectEmit(true, true, false, false);
-        emit ERC3009Upgradeable.AuthorizationUsed(alice, nonce);
+        emit ERC3009Upgradeable.AuthorizationUsed({authorizer: alice, nonce: nonce});
         vm.prank(bob);
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
@@ -132,5 +133,17 @@ contract StablecoinReceiveWithAuthorizationTest is StablecoinTest {
         assertFalse(stablecoin.authorizationState(alice, nonce));
         _receiveWithAuth(1, nonce);
         assertTrue(stablecoin.authorizationState(alice, nonce));
+    }
+
+    /// @notice Verifies the external (v, r, s) overload delegates correctly to the bytes-signature variant
+    /// @dev Coverage: the v/r/s overload is a thin wrapper; one passing call is sufficient to confirm delegation
+    function test_receiveWithAuthorization_success_vrsOverload(bytes32 nonce, uint256 amount) public {
+        amount = bound(amount, 1, INITIAL_MINT);
+        bytes32 digest = _receiveAuthDigest(alice, bob, amount, 0, type(uint256).max, nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ALICE_KEY, digest);
+        uint256 bobBalBefore = stablecoin.balanceOf(bob);
+        vm.prank(bob);
+        stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, v, r, s);
+        assertEq(stablecoin.balanceOf(bob), bobBalBefore + amount);
     }
 }

@@ -7,16 +7,16 @@ import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 
 /// @title MutableBeaconProxy
 /// @author Coinbase
-/// @notice A minimal {BeaconProxy} that supports a direct implementation
-/// override via the ERC-1967 implementation slot, bypassing the beacon
-/// for this proxy instance.
+/// @notice A {BeaconProxy} variant whose beacon address can be changed after
+/// deployment.
 ///
-/// @dev Resolution order in {_implementation}:
-///   1. If the ERC-1967 implementation slot is set, use it directly (opt-out).
-///   2. Otherwise, query the beacon for the shared implementation (default).
-///
-/// The override is set from the implementation side (via delegatecall) rather
-/// than through proxy-level admin functions, keeping the proxy minimal.
+/// @dev The standard {BeaconProxy} caches the beacon in an immutable variable
+/// at construction time, making the beacon address permanently fixed. This
+/// contract overrides {_getBeacon} to read the beacon from the ERC-1967 beacon
+/// storage slot on every call instead. Because delegatecalls from the
+/// implementation execute in this proxy's storage context, the implementation
+/// can update the beacon slot (e.g. via {ERC1967Utils.upgradeBeaconToAndCall}),
+/// allowing each proxy instance to migrate to a different beacon independently.
 contract MutableBeaconProxy is BeaconProxy {
     /// @notice Deploys the proxy pointing at `beacon`.
     ///
@@ -24,9 +24,11 @@ contract MutableBeaconProxy is BeaconProxy {
     /// @param data   Optional calldata forwarded to the implementation via delegatecall on deployment.
     constructor(address beacon, bytes memory data) payable BeaconProxy(beacon, data) {}
 
-    /// @notice Returns the beacon address.
+    /// @notice Returns the beacon address stored in the ERC-1967 beacon slot.
     ///
-    /// @dev Returns the address stored in the ERC-1967 beacon slot.
+    /// @dev Overrides the base {BeaconProxy._getBeacon}, which returns an
+    /// immutable variable. Reading from storage allows the beacon to be updated
+    /// post-deployment by the implementation via delegatecall.
     ///
     /// @return The current beacon address.
     function _getBeacon() internal view override returns (address) {

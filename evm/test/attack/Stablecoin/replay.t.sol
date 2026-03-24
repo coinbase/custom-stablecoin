@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
 import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Replay attack tests for ERC-3009 and ERC-2612 (permit) signed authorizations.
 /// Verifies that nonces are permanently consumed and domain separators bind to chain and contract.
