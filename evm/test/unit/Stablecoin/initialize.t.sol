@@ -1,10 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+import {TokenMetadata} from "src/lib/TokenMetadata.sol";
+
+import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
+
+/// @dev Harness used only to reach the DecimalsAlreadyInitialized branch.
+/// _initializeDecimals is onlyInitializing so it must be called from inside an initializer.
+/// Calling it twice in one initializer hits the `$.decimals != 0` guard on the second call.
+contract DecimalsHarness is TokenMetadata {
+    function initDecimalsTwice(uint8 d) external initializer {
+        _initializeDecimals(d);
+        _initializeDecimals(d);
+    }
+}
 
 contract StablecoinInitializeTest is StablecoinTest {
     /// @dev Deploy without initializing so each test can call initialize with controlled args.
@@ -31,10 +43,20 @@ contract StablecoinInitializeTest is StablecoinTest {
         stablecoin.initialize(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, admin);
     }
 
-    /// @notice Verifies initialize reverts when decimals is below the minimum of 2
-    /// @dev DecimalsOutOfBounds: the valid range is [MIN_DECIMALS, MAX_DECIMALS] inclusive
+    /// @notice Verifies _initializeDecimals reverts when called a second time with decimals already set
+    /// @dev DecimalsAlreadyInitialized: onlyInitializing allows two calls in one initializer;
+    ///      the second call sees $.decimals != 0 and must revert. Tested via DecimalsHarness
+    ///      because Stablecoin.initialize only calls _initializeDecimals once.
+    function test_initialize_revert_decimalsAlreadyInitialized() public {
+        DecimalsHarness harness = new DecimalsHarness();
+        vm.expectRevert(TokenMetadata.DecimalsAlreadyInitialized.selector);
+        harness.initDecimalsTwice(TOKEN_DECIMALS);
+    }
+
+    /// @notice Verifies initialize reverts when decimals is below the minimum of 6
+    /// @dev DecimalsOutOfBounds: the valid range is [MIN_DECIMALS=6, MAX_DECIMALS=18] inclusive
     function test_initialize_revert_decimalsOutOfBounds_tooLow(uint8 decimals_) public {
-        decimals_ = uint8(bound(decimals_, 0, 1));
+        decimals_ = uint8(bound(decimals_, 0, 5));
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("DecimalsOutOfBounds(uint8)")), decimals_));
         stablecoin.initialize(TOKEN_NAME, TOKEN_SYMBOL, decimals_, admin);
     }
@@ -64,9 +86,9 @@ contract StablecoinInitializeTest is StablecoinTest {
     }
 
     /// @notice Verifies initialize sets the token decimals correctly for any valid value
-    /// @dev State: decimals() must equal the argument; bounded to [MIN_DECIMALS, MAX_DECIMALS]
+    /// @dev State: decimals() must equal the argument; bounded to [MIN_DECIMALS=6, MAX_DECIMALS=18]
     function test_initialize_success_setsDecimals(uint8 decimals_) public {
-        decimals_ = uint8(bound(decimals_, 2, 18));
+        decimals_ = uint8(bound(decimals_, 6, 18));
         stablecoin.initialize(TOKEN_NAME, TOKEN_SYMBOL, decimals_, admin);
         assertEq(stablecoin.decimals(), decimals_);
     }

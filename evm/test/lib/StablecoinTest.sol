@@ -3,9 +3,10 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+
+import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 
 /// @dev Base test contract for Stablecoin. Deploys a full proxy stack and seeds actors
 /// with tokens. All test files inherit from this. Override setUp() with super.setUp() to add
@@ -50,7 +51,7 @@ contract StablecoinTest is Test {
     string internal constant TOKEN_SYMBOL = "TUSD";
     uint8 internal constant TOKEN_DECIMALS = 6;
     uint256 internal constant MINT_LIMIT = 1_000_000e6;
-    uint256 internal constant MINT_INTERVAL = 1 days;
+    uint40 internal constant MINT_INTERVAL = 1 days;
     uint256 internal constant INITIAL_MINT = 100_000e6;
 
     // ── Setup ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {Blocklist} from "src/lib/Blocklist.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinUpdateBlocklistStatusTest is StablecoinTest {
@@ -73,7 +74,7 @@ contract StablecoinUpdateBlocklistStatusTest is StablecoinTest {
             stablecoin.updateBlocklistStatus(account, true);
         }
         vm.expectEmit(true, false, false, true);
-        emit Blocklist.BlocklistStatusUpdated(account, blocklisted);
+        emit Blocklist.BlocklistStatusUpdated({account: account, blocklisted: blocklisted});
         vm.prank(blocklister);
         stablecoin.updateBlocklistStatus(account, blocklisted);
     }

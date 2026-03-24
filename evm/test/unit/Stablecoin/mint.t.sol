@@ -4,8 +4,9 @@ pragma solidity 0.8.30;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {MintRateLimit} from "src/lib/MintRateLimit.sol";
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinMintTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
@@ -20,6 +21,18 @@ contract StablecoinMintTest is StablecoinTest {
             )
         );
         vm.prank(caller);
+        stablecoin.mint(alice, 1);
+    }
+
+    /// @notice Verifies mint reverts with a clear error when the caller has MINT_ROLE but no rate-limit config
+    /// @dev MinterNotConfigured: a division-by-zero panic must never surface; the explicit error fires first
+    function test_mint_revert_minterNotConfigured(address unconfiguredMinter) public {
+        vm.assume(unconfiguredMinter != minter && unconfiguredMinter != address(0));
+        vm.startPrank(admin);
+        stablecoin.grantRole(stablecoin.MINT_ROLE(), unconfiguredMinter);
+        vm.stopPrank();
+        vm.expectRevert(abi.encodeWithSelector(MintRateLimit.MinterNotConfigured.selector, unconfiguredMinter));
+        vm.prank(unconfiguredMinter);
         stablecoin.mint(alice, 1);
     }
 
@@ -71,7 +84,7 @@ contract StablecoinMintTest is StablecoinTest {
         vm.assume(to != address(0));
         amount = bound(amount, 1, stablecoin.currentMintLimit(minter));
         vm.expectEmit(true, true, false, true);
-        emit Stablecoin.Minted(minter, to, amount);
+        emit Stablecoin.Minted({minter: minter, to: to, amount: amount});
         vm.prank(minter);
         stablecoin.mint(to, amount);
     }

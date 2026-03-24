@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinCancelAuthorizationTest is StablecoinTest {
@@ -51,7 +52,17 @@ contract StablecoinCancelAuthorizationTest is StablecoinTest {
     function test_cancelAuthorization_success_emitsAuthorizationCanceled(bytes32 nonce) public {
         bytes memory sig = _signCancelAuth(ALICE_KEY, alice, nonce);
         vm.expectEmit(true, true, false, false);
-        emit ERC3009Upgradeable.AuthorizationCanceled(alice, nonce);
+        emit ERC3009Upgradeable.AuthorizationCanceled({authorizer: alice, nonce: nonce});
         stablecoin.cancelAuthorization(alice, nonce, sig);
+    }
+
+    /// @notice Verifies the external (v, r, s) overload delegates correctly to the bytes-signature variant
+    /// @dev Coverage: the v/r/s overload is a thin wrapper; one passing call is sufficient to confirm delegation
+    function test_cancelAuthorization_success_vrsOverload(bytes32 nonce) public {
+        assertFalse(stablecoin.authorizationState(alice, nonce));
+        bytes32 digest = _cancelAuthDigest(alice, nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ALICE_KEY, digest);
+        stablecoin.cancelAuthorization(alice, nonce, v, r, s);
+        assertTrue(stablecoin.authorizationState(alice, nonce));
     }
 }

@@ -6,11 +6,12 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
-import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
-contract StablecoinupdateBeaconToAndCallTest is StablecoinTest {
+import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
+
+contract StablecoinUpdateBeaconToAndCallTest is StablecoinTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
     /// @notice Verifies updateBeaconToAndCall reverts for any caller without DEFAULT_ADMIN_ROLE

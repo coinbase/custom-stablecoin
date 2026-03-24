@@ -114,7 +114,15 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 r,
         bytes32 s
     ) external {
-        transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, abi.encodePacked(r, s, v));
+        transferWithAuthorization({
+            from: from,
+            to: to,
+            value: value,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: nonce,
+            signature: abi.encodePacked(r, s, v)
+        });
     }
 
     /// @notice Executes a transfer from `from` to `to` where only `to` may submit the transaction.
@@ -142,7 +150,15 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
         bytes32 r,
         bytes32 s
     ) external {
-        receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce, abi.encodePacked(r, s, v));
+        receiveWithAuthorization({
+            from: from,
+            to: to,
+            value: value,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: nonce,
+            signature: abi.encodePacked(r, s, v)
+        });
     }
 
     /// @notice Cancels a previously unused authorization nonce.
@@ -155,7 +171,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @param r          ECDSA signature component.
     /// @param s          ECDSA signature component.
     function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
-        cancelAuthorization(authorizer, nonce, abi.encodePacked(r, s, v));
+        cancelAuthorization({authorizer: authorizer, nonce: nonce, signature: abi.encodePacked(r, s, v)});
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

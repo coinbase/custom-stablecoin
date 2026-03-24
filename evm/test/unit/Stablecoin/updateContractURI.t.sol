@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {TokenMetadata} from "src/lib/TokenMetadata.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinUpdateContractURITest is StablecoinTest {

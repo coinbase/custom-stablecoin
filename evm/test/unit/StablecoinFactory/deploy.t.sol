@@ -3,9 +3,10 @@ pragma solidity 0.8.30;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {StablecoinFactoryTest} from "test/lib/StablecoinFactoryTest.sol";
-import {StablecoinFactory} from "src/StablecoinFactory.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
+import {StablecoinFactory} from "src/StablecoinFactory.sol";
+
+import {StablecoinFactoryTest} from "test/lib/StablecoinFactoryTest.sol";
 
 /// @dev Unit tests for deploy() and computeAddress(). computeAddress tests are merged here
 /// because the core invariant is that the computed address equals the deployed address.
@@ -38,7 +39,7 @@ contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
     /// @notice Verifies deploy returns an address with contract code
     /// @dev State: the returned address must have code.length > 0 after deployment
     function test_deploy_success_deploysProxy(string calldata name, string calldata symbol, uint8 decimals_) public {
-        decimals_ = uint8(bound(decimals_, 2, 18));
+        decimals_ = uint8(bound(decimals_, 6, 18));
         vm.prank(deployer);
         address proxyAddr = factory.deploy(name, symbol, decimals_, stablecoinAdmin, DEPLOY_SALT);
         assertGt(proxyAddr.code.length, 0);
@@ -49,7 +50,7 @@ contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
     function test_deploy_success_emitsStablecoinDeployed(bytes32 salt) public {
         address predicted = _computeAddress(salt);
         vm.expectEmit(true, false, false, false);
-        emit StablecoinFactory.StablecoinDeployed(predicted);
+        emit StablecoinFactory.StablecoinDeployed({stablecoin: predicted});
         _deploy(salt);
     }
 
@@ -66,7 +67,7 @@ contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
     function test_deploy_success_initializesStablecoin(string calldata name, string calldata symbol, uint8 decimals_)
         public
     {
-        decimals_ = uint8(bound(decimals_, 2, 18));
+        decimals_ = uint8(bound(decimals_, 6, 18));
         vm.prank(deployer);
         address proxyAddr = factory.deploy(name, symbol, decimals_, stablecoinAdmin, DEPLOY_SALT);
         Stablecoin sc = Stablecoin(proxyAddr);

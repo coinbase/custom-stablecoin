@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinConfigureMinterTest is StablecoinTest {
@@ -37,9 +38,9 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter reverts when limit is zero
     /// @dev InvalidMinterConfig: both limit and interval must be non-zero for a valid config
-    function test_configureMinter_revert_zeroLimit(address target, uint256 interval) public {
+    function test_configureMinter_revert_zeroLimit(address target, uint40 interval) public {
         vm.assume(target != minter && target != address(0));
-        interval = bound(interval, 1, type(uint40).max);
+        vm.assume(interval != 0);
         vm.startPrank(admin);
         stablecoin.grantRole(stablecoin.MINT_ROLE(), target);
         vm.stopPrank();
@@ -65,9 +66,9 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter stores the new limit and interval for the minter
     /// @dev State: currentMintLimit(minter) equals the new limit immediately after configuration
-    function test_configureMinter_success_updatesConfig(uint256 limit, uint256 interval) public {
+    function test_configureMinter_success_updatesConfig(uint256 limit, uint40 interval) public {
         limit = bound(limit, 1, type(uint128).max);
-        interval = bound(interval, 1, type(uint40).max);
+        vm.assume(interval != 0);
         vm.prank(rateLimitAdmin);
         stablecoin.configureMinter(minter, limit, interval);
         assertEq(stablecoin.currentMintLimit(minter), limit);
@@ -75,11 +76,11 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter emits MinterConfigured with the correct minter, limit, and interval
     /// @dev Event integrity: all three fields must match the arguments passed to configureMinter
-    function test_configureMinter_success_emitsMinterConfigured(uint256 limit, uint256 interval) public {
+    function test_configureMinter_success_emitsMinterConfigured(uint256 limit, uint40 interval) public {
         limit = bound(limit, 1, type(uint128).max);
-        interval = bound(interval, 1, type(uint40).max);
+        vm.assume(interval != 0);
         vm.expectEmit(true, false, false, true);
-        emit MintRateLimit.MinterConfigured(minter, limit, interval);
+        emit MintRateLimit.MinterConfigured({minter: minter, limit: limit, interval: interval});
         vm.prank(rateLimitAdmin);
         stablecoin.configureMinter(minter, limit, interval);
     }

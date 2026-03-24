@@ -12,9 +12,7 @@ import {
     ERC20PermitUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 
 import {Blocklist} from "./lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
@@ -27,7 +25,8 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///
 /// @dev Roles:
 ///   - DEFAULT_ADMIN_ROLE – can grant/revoke all other roles. Two-step
-///     transfer with configurable delay.
+///     transfer with configurable delay. Can atomically grant MINT_ROLE and
+///     configure a rate limit via {grantMinterRoleWithLimit}.
 ///   - MINT_ROLE – can mint tokens up to their configured rate limit.
 ///     After granting, a MINT_RATE_LIMIT_ROLE holder must call {configureMinter}
 ///     to set the rate limit. Revoking MINT_ROLE clears the rate limit.
@@ -47,11 +46,22 @@ contract Stablecoin is
     MintRateLimit,
     TokenMetadata
 {
+    /// @notice Role required to mint tokens up to the configured rate limit.
     bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
+
+    /// @notice Role required to burn the caller's own tokens.
     bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
+
+    /// @notice Role required to update mint rate-limit configurations for existing minters.
     bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
+
+    /// @notice Role required to update blocklist status for addresses.
     bytes32 public constant BLOCKLIST_ROLE = keccak256("BLOCKLIST_ROLE");
+
+    /// @notice Role required to update the contract-level metadata URI (ERC-7572).
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
+
+    /// @notice Role required to pause and unpause all token transfers.
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
     /// @notice Emitted when tokens are minted.
@@ -71,6 +81,7 @@ contract Stablecoin is
     /*                        CONSTRUCTOR                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @notice Disables initializers on the implementation contract to prevent direct initialization.
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -122,8 +133,25 @@ contract Stablecoin is
     /// @param minter   Minter address to update.
     /// @param limit    New maximum mint capacity.
     /// @param interval Replenishment interval in seconds.
-    function configureMinter(address minter, uint256 limit, uint256 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
+    function configureMinter(address minter, uint256 limit, uint40 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
         _checkRole({role: MINT_ROLE, account: minter});
+        _configureMinter({minter: minter, limit: limit, interval: interval});
+    }
+
+    /// @notice Atomically grants `MINT_ROLE` to `minter` and configures its rate-limit in one transaction.
+    ///
+    /// @dev Combines {grantRole} and {configureMinter} to eliminate the two-step setup
+    /// where a newly-granted minter has `MINT_ROLE` but no rate-limit config and would
+    /// revert with {MinterNotConfigured} if it attempted to mint.
+    ///
+    /// @param minter   Address to grant `MINT_ROLE` and configure.
+    /// @param limit    Maximum mint capacity.
+    /// @param interval Replenishment interval in seconds.
+    function grantMinterRoleWithLimit(address minter, uint256 limit, uint40 interval)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        _grantRole({role: MINT_ROLE, account: minter});
         _configureMinter({minter: minter, limit: limit, interval: interval});
     }
 
