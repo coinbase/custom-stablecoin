@@ -6,7 +6,6 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 /// @title TwoStepUpgradeableBeacon
-/// @author Coinbase
 /// @notice An {UpgradeableBeacon} whose ownership is transferred via a two-step process,
 /// protecting against accidental ownership loss.
 ///
@@ -14,6 +13,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 /// with {Ownable2Step} (propose + accept ownership transfer). Ownership does not change
 /// until the pending owner explicitly calls {acceptOwnership}, preventing an erroneous
 /// address from permanently locking beacon upgrades.
+/// @author Coinbase
 contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
@@ -29,12 +29,7 @@ contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /*                      PUBLIC FUNCTIONS                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Starts a two-step ownership transfer to `newOwner`.
-    ///
-    /// @dev Overrides both {Ownable.transferOwnership} and {Ownable2Step.transferOwnership}.
-    /// The transfer is not complete until `newOwner` calls {acceptOwnership}.
-    ///
-    /// @param newOwner The address being proposed as the new owner.
+    /// @inheritdoc Ownable2Step
     function transferOwnership(address newOwner) public override(Ownable, Ownable2Step) {
         Ownable2Step.transferOwnership(newOwner);
     }
@@ -43,12 +38,7 @@ contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Completes an ownership transfer by storing the new owner.
-    ///
-    /// @dev Overrides both {Ownable._transferOwnership} and {Ownable2Step._transferOwnership}
-    /// to ensure the two-step pending-owner state is cleared on completion.
-    ///
-    /// @param newOwner The address taking ownership.
+    /// @inheritdoc Ownable2Step
     function _transferOwnership(address newOwner) internal override(Ownable, Ownable2Step) {
         Ownable2Step._transferOwnership(newOwner);
     }

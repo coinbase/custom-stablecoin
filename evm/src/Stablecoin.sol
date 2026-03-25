@@ -20,7 +20,6 @@ import {MintRateLimit} from "./lib/MintRateLimit.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
-/// @author Coinbase
 /// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
@@ -35,6 +34,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLOCKLIST_ROLE – can update blocklist status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
+/// @author Coinbase
 contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
@@ -204,13 +204,6 @@ contract Stablecoin is
     /// @return The number of decimals.
     function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
         return TokenMetadata.decimals();
-    }
-
-    /// @notice Returns the version of the stablecoin implementation.
-    ///
-    /// @return The version of the stablecoin implementation.
-    function version() public pure virtual returns (string memory) {
-        return VERSION;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

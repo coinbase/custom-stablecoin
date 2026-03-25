@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @title MintRateLimit
-/// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for rate-limited minting.
 ///
 /// @dev Each minter has a capacity that replenishes linearly over a
 /// configurable interval. Minting deducts from the remaining capacity;
 /// once depleted the minter must wait for it to refill.
+/// @author Coinbase
 abstract contract MintRateLimit {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */

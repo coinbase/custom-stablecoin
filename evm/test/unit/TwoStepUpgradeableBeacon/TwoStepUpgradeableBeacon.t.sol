@@ -8,7 +8,6 @@ import {Stablecoin} from "src/Stablecoin.sol";
 import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
-import {StablecoinV2} from "test/lib/mocks/StablecoinV2.sol";
 
 contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     TwoStepUpgradeableBeacon internal twoStepBeacon;
@@ -45,7 +44,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     /// @notice Verifies upgradeTo updates the implementation address
     /// @dev State: implementation() must equal newImplementation after the call
     function test_upgradeTo_success_updatesImplementation() public {
-        StablecoinV2 newImpl = new StablecoinV2();
+        Stablecoin newImpl = new Stablecoin();
         vm.prank(admin);
         twoStepBeacon.upgradeTo(address(newImpl));
         assertEq(twoStepBeacon.implementation(), address(newImpl));
@@ -54,7 +53,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     /// @notice Verifies upgradeTo emits Upgraded with the new implementation address
     /// @dev Event integrity: Upgraded must fire so off-chain indexers track upgrades
     function test_upgradeTo_success_emitsUpgraded() public {
-        StablecoinV2 newImpl = new StablecoinV2();
+        Stablecoin newImpl = new Stablecoin();
         vm.expectEmit(true, false, false, false);
         emit UpgradeableBeacon.Upgraded(address(newImpl));
         vm.prank(admin);
@@ -65,7 +64,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     /// @dev Access control: onlyOwner must reject all non-owner callers
     function test_upgradeTo_revert_unauthorized(address caller) public {
         vm.assume(caller != admin);
-        StablecoinV2 newImpl = new StablecoinV2();
+        Stablecoin newImpl = new Stablecoin();
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, caller));
         vm.prank(caller);
         twoStepBeacon.upgradeTo(address(newImpl));

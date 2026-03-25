@@ -81,35 +81,37 @@ contract StablecoinupgradeBeaconToAndCallTest is StablecoinTest {
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
     }
 
-    /// @notice Verifies the proxy reports the new implementation version after a beacon upgrade
-    /// @dev Version check: delegatecall routes to the new implementation; version() must reflect v2
+    /// @notice Verifies the proxy reports the new VERSION after upgrading the beacon to a new implementation
+    /// @dev Version check: delegatecall routes to the new impl; VERSION() must reflect the new deployment
     function test_upgradeBeaconToAndCall_success_updatesVersion() public {
-        assertEq(stablecoin.version(), Stablecoin(address(stablecoinImpl)).VERSION());
+        string memory v1 = stablecoin.VERSION();
 
         StablecoinV2 newImpl = new StablecoinV2();
         TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(newImpl), admin);
-
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
 
-        assertEq(stablecoin.version(), newImpl.VERSION_V2());
+        assertNotEq(stablecoin.VERSION(), v1);
+        assertEq(stablecoin.VERSION(), newImpl.VERSION());
     }
 
-    /// @notice Verifies version reverts to v1 if the beacon is rolled back to the original implementation
-    /// @dev Rollback: beacon slot is mutable; swapping back must restore the original version
-    function test_upgradeBeaconToAndCall_success_versionRevertsOnRollback() public {
-        string memory v1 = stablecoin.version();
+    /// @notice Verifies the proxy can be rolled back to the original beacon after an upgrade
+    /// @dev Rollback: beacon slot is mutable in both directions; original beacon must be restorable
+    function test_upgradeBeaconToAndCall_success_beaconSlotRevertsOnRollback() public {
+        Stablecoin newImpl = new Stablecoin();
+        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(newImpl), admin);
 
-        // Upgrade to v2
-        StablecoinV2 v2Impl = new StablecoinV2();
-        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(v2Impl), admin);
+        // Upgrade to a new beacon
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
-        assertEq(stablecoin.version(), v2Impl.VERSION_V2());
+        assertEq(address(uint160(uint256(vm.load(address(proxy), ERC1967Utils.BEACON_SLOT)))), address(newBeacon));
 
-        // Roll back to original beacon
+        // Roll back to the original beacon
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(beacon), "");
-        assertEq(stablecoin.version(), v1);
+        assertEq(address(uint160(uint256(vm.load(address(proxy), ERC1967Utils.BEACON_SLOT)))), address(beacon));
+
+        // Proxy still functions correctly
+        assertEq(stablecoin.name(), TOKEN_NAME);
     }
 }

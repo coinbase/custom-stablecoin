@@ -6,12 +6,12 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 /// @title ERC3009Upgradeable
-/// @author Coinbase
 /// @notice ERC-3009 Transfer With Authorization implementation using ERC-7201 namespaced storage.
 ///
 /// @dev Enables meta-transaction transfers via signed EIP-712 authorizations. Uses random 32-byte
 /// nonces (not sequential) to allow multiple concurrent authorizations. Inherits `ERC20Upgradeable`
 /// for `_transfer` and `EIP712Upgradeable` for `_hashTypedDataV4`.
+/// @author Coinbase
 abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */

@@ -6,7 +6,6 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 
 /// @title MutableBeaconProxy
-/// @author Coinbase
 /// @notice A {BeaconProxy} variant whose beacon address can be changed after
 /// deployment.
 ///
@@ -17,6 +16,7 @@ import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 /// implementation execute in this proxy's storage context, the implementation
 /// can update the beacon slot (e.g. via {ERC1967Utils.upgradeBeaconToAndCall}),
 /// allowing each proxy instance to migrate to a different beacon independently.
+/// @author Coinbase
 contract MutableBeaconProxy is BeaconProxy {
     /// @notice Deploys the proxy pointing at `beacon`.
     ///
