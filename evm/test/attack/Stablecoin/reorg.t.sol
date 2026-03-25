@@ -6,7 +6,7 @@ import {ERC3009Upgradeable} from "src/lib/ERC3009Upgradeable.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Reorg and timestamp manipulation tests. Two critical areas use block.timestamp:
-/// (1) ERC-3009 validAfter/validBefore boundary checks, (2) MintRateLimit replenishment math.
+/// (1) ERC-3009 validAfter/validBefore boundary checks, (2) RateLimit replenishment math.
 contract StablecoinReorgTest is StablecoinTest {
     // ── ERC-3009 timestamp boundaries ─────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ contract StablecoinReorgTest is StablecoinTest {
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, validBefore, nonce, sig);
     }
 
-    // ── MintRateLimit timestamp manipulation ──────────────────────────────────────────────
+    // ── RateLimit timestamp manipulation ──────────────────────────────────────────────
 
     /// @notice Verifies a rolled-back timestamp cannot inflate the replenished amount beyond the limit
     /// @dev Overflow protection: very large elapsed values must be capped; no replenishment > config.limit

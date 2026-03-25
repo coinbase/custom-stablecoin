@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {RateLimit} from "src/lib/RateLimit.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
@@ -25,23 +25,31 @@ contract StablecoinMintTest is StablecoinTest {
     }
 
     /// @notice Verifies mint reverts with a clear error when the caller has MINT_ROLE but no rate-limit config
-    /// @dev MinterNotConfigured: a division-by-zero panic must never surface; the explicit error fires first
+    /// @dev NotConfigured: a division-by-zero panic must never surface; the explicit error fires first
     function test_mint_revert_minterNotConfigured(address unconfiguredMinter) public {
         vm.assume(unconfiguredMinter != minter && unconfiguredMinter != address(0));
         vm.startPrank(admin);
         stablecoin.grantRole(stablecoin.MINT_ROLE(), unconfiguredMinter);
         vm.stopPrank();
-        vm.expectRevert(abi.encodeWithSelector(MintRateLimit.MinterNotConfigured.selector, unconfiguredMinter));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateLimit.NotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), unconfiguredMinter
+            )
+        );
         vm.prank(unconfiguredMinter);
         stablecoin.mint(alice, 1);
     }
 
     /// @notice Verifies mint reverts when the requested amount exceeds the minter's remaining capacity
-    /// @dev MintLimitExceeded: capacity is checked before _mint; no partial state changes should occur
+    /// @dev LimitExceeded: capacity is checked before _mint; no partial state changes should occur
     function test_mint_revert_mintLimitExceeded(uint256 amount) public {
         uint256 remaining = stablecoin.currentMintLimit(minter);
         amount = bound(amount, remaining + 1, type(uint256).max);
-        vm.expectRevert(abi.encodeWithSelector(MintRateLimit.MintLimitExceeded.selector, minter, amount, remaining));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateLimit.LimitExceeded.selector, stablecoin.MINT_RATE_LIMIT_KEY(), minter, amount, remaining
+            )
+        );
         vm.prank(minter);
         stablecoin.mint(alice, amount);
     }

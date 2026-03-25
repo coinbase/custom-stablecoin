@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {RateLimit} from "src/lib/RateLimit.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 import {StablecoinFactory} from "src/StablecoinFactory.sol";
 
@@ -94,8 +94,8 @@ contract StablecoinWorkflowTest is StablecoinTest {
         stablecoin.mint(carol, mintAmount);
 
         // Revoke MINT_ROLE — must emit MinterRemoved and clear config
-        vm.expectEmit(true, false, false, false);
-        emit MintRateLimit.MinterRemoved({minter: minter2});
+        vm.expectEmit(true, true, false, false);
+        emit RateLimit.RateLimitRemoved({key: stablecoin.MINT_RATE_LIMIT_KEY(), account: minter2});
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter2);
         vm.stopPrank();

@@ -17,7 +17,7 @@ abstract contract Blocklist {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Blocklist")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant BLOCKLIST_STORAGE_LOCATION =
+    bytes32 private constant _BLOCKLIST_STORAGE_LOCATION =
         0x2b7d78bb522e987c413d13def90590415d174dbd956b1e8f62074dd049e4d100;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -90,7 +90,7 @@ abstract contract Blocklist {
     /// @return $ Storage pointer to the layout struct.
     function _getBlocklistLayout() private pure returns (BlocklistLayout storage $) {
         assembly {
-            $.slot := BLOCKLIST_STORAGE_LOCATION
+            $.slot := _BLOCKLIST_STORAGE_LOCATION
         }
     }
 }
