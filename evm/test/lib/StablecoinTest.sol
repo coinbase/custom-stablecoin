@@ -5,8 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
-
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
+import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
 /// @dev Base test contract for Stablecoin. Deploys a full proxy stack and seeds actors
 /// with tokens. All test files inherit from this. Override setUp() with super.setUp() to add
@@ -43,7 +42,7 @@ contract StablecoinTest is Test {
     // ── Contracts ────────────────────────────────────────────────────────────────────────
     Stablecoin internal stablecoin;
     Stablecoin internal stablecoinImpl;
-    MockBeacon internal beacon;
+    TwoStepUpgradeableBeacon internal beacon;
     MutableBeaconProxy internal proxy;
 
     // ── Defaults ─────────────────────────────────────────────────────────────────────────
@@ -59,9 +58,9 @@ contract StablecoinTest is Test {
         alice = vm.addr(ALICE_KEY);
         bob = vm.addr(BOB_KEY);
 
-        // Deploy implementation and beacon
+        // Deploy implementation and beacon (delay=0 for tests; use 2 days in production)
         stablecoinImpl = new Stablecoin();
-        beacon = new MockBeacon(address(stablecoinImpl));
+        beacon = new TwoStepUpgradeableBeacon(address(stablecoinImpl), admin);
 
         // Deploy proxy and initialize in one step via constructor calldata
         bytes memory initData = abi.encodeCall(Stablecoin.initialize, (TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, admin));
@@ -71,7 +70,7 @@ contract StablecoinTest is Test {
         // Labels
         vm.label(address(stablecoin), "Stablecoin");
         vm.label(address(stablecoinImpl), "Stablecoin(impl)");
-        vm.label(address(beacon), "MockBeacon");
+        vm.label(address(beacon), "TwoStepUpgradeableBeacon");
         vm.label(address(proxy), "Proxy");
         vm.label(alice, "alice");
         vm.label(bob, "bob");

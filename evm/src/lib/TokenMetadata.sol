@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 /// @title TokenMetadata
-/// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for custom stablecoin metadata.
+/// @author Coinbase
 abstract contract TokenMetadata is Initializable {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */

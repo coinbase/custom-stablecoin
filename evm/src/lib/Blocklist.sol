@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 /// @title Blocklist
-/// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for blocklisted addresses.
+/// @author Coinbase
 abstract contract Blocklist {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */

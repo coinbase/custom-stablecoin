@@ -5,8 +5,8 @@ import {MutableBeaconProxy} from "src/MutableBeaconProxy.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 import {TokenMetadata} from "src/lib/TokenMetadata.sol";
 
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
+import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
 /// @dev Harness used only to reach the DecimalsAlreadyInitialized branch.
 /// _initializeDecimals is onlyInitializing so it must be called from inside an initializer.
@@ -22,13 +22,13 @@ contract StablecoinInitializeTest is StablecoinTest {
     /// @dev Deploy without initializing so each test can call initialize with controlled args.
     function setUp() public override {
         stablecoinImpl = new Stablecoin();
-        beacon = new MockBeacon(address(stablecoinImpl));
+        beacon = new TwoStepUpgradeableBeacon(address(stablecoinImpl), admin);
         proxy = new MutableBeaconProxy(address(beacon), "");
         stablecoin = Stablecoin(address(proxy));
 
         vm.label(address(stablecoin), "Stablecoin");
         vm.label(address(stablecoinImpl), "Stablecoin(impl)");
-        vm.label(address(beacon), "MockBeacon");
+        vm.label(address(beacon), "TwoStepUpgradeableBeacon");
         vm.label(admin, "admin");
     }
 

@@ -20,7 +20,6 @@ import {MintRateLimit} from "./lib/MintRateLimit.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
-/// @author Coinbase
 /// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
@@ -35,6 +34,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLOCKLIST_ROLE – can update blocklist status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
+/// @author Coinbase
 contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
@@ -63,6 +63,9 @@ contract Stablecoin is
 
     /// @notice Role required to pause and unpause all token transfers.
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+
+    /// @notice The version of the stablecoin implementation.
+    string public constant VERSION = "1.0.0";
 
     /// @notice Emitted when tokens are minted.
     ///
@@ -188,7 +191,7 @@ contract Stablecoin is
     ///
     /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
     /// @param data      Optional calldata to forward to the new implementation via delegatecall.
-    function updateBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
         ERC1967Utils.upgradeBeaconToAndCall(newBeacon, data);
     }
 
@@ -230,7 +233,6 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
         super._update(from, to, value);
