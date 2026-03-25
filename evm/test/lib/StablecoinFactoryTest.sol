@@ -6,11 +6,10 @@ import {Test} from "forge-std/Test.sol";
 
 import {Stablecoin} from "src/Stablecoin.sol";
 import {StablecoinFactory} from "src/StablecoinFactory.sol";
-
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
+import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
 /// @dev Base test contract for StablecoinFactory. Deploys a UUPS-proxied factory backed by a
-/// MockBeacon pointing at the Stablecoin implementation. All factory test files inherit from this.
+/// TwoStepUpgradeableBeacon pointing at the Stablecoin implementation. All factory test files inherit from this.
 contract StablecoinFactoryTest is Test {
     // ── Actors ───────────────────────────────────────────────────────────────────────────
     address internal admin = makeAddr("admin");
@@ -20,7 +19,7 @@ contract StablecoinFactoryTest is Test {
 
     // ── Contracts ────────────────────────────────────────────────────────────────────────
     Stablecoin internal stablecoinImpl;
-    MockBeacon internal beacon;
+    TwoStepUpgradeableBeacon internal beacon;
     StablecoinFactory internal factory;
 
     // ── Defaults ─────────────────────────────────────────────────────────────────────────
@@ -33,7 +32,8 @@ contract StablecoinFactoryTest is Test {
     // ── Setup ─────────────────────────────────────────────────────────────────────────────
     function setUp() public virtual {
         stablecoinImpl = new Stablecoin();
-        beacon = new MockBeacon(address(stablecoinImpl));
+        // delay=0 for tests; use 2 days in production
+        beacon = new TwoStepUpgradeableBeacon(address(stablecoinImpl), admin);
 
         // Wrap factory in a UUPS proxy and initialize
         StablecoinFactory factoryImpl = new StablecoinFactory(address(beacon));
@@ -42,7 +42,7 @@ contract StablecoinFactoryTest is Test {
         factory = StablecoinFactory(address(factoryProxy));
 
         vm.label(address(stablecoinImpl), "Stablecoin(impl)");
-        vm.label(address(beacon), "MockBeacon");
+        vm.label(address(beacon), "TwoStepUpgradeableBeacon");
         vm.label(address(factory), "StablecoinFactory");
         vm.label(admin, "admin");
         vm.label(deployer, "deployer");

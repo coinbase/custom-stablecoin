@@ -7,8 +7,8 @@ import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 
 import {Stablecoin} from "src/Stablecoin.sol";
+import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
-import {MockBeacon} from "test/lib/mocks/MockBeacon.sol";
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 import {StablecoinV2} from "test/lib/mocks/StablecoinV2.sol";
 
@@ -52,7 +52,7 @@ contract StablecoinupgradeBeaconToAndCallTest is StablecoinTest {
     /// @dev After the call, the proxy delegates to the new beacon's implementation, not the old one
     function test_upgradeBeaconToAndCall_success_updatesBeaconSlot() public {
         Stablecoin newImpl = new Stablecoin();
-        MockBeacon newBeacon = new MockBeacon(address(newImpl));
+        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(newImpl), admin);
 
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
@@ -73,7 +73,7 @@ contract StablecoinupgradeBeaconToAndCallTest is StablecoinTest {
     /// @dev Event integrity: IERC1967.BeaconUpgraded must be emitted so indexers track the beacon swap
     function test_upgradeBeaconToAndCall_success_emitsBeaconUpgraded() public {
         Stablecoin newImpl = new Stablecoin();
-        MockBeacon newBeacon = new MockBeacon(address(newImpl));
+        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(newImpl), admin);
 
         vm.expectEmit(true, false, false, false);
         emit IERC1967.BeaconUpgraded(address(newBeacon));
@@ -87,7 +87,7 @@ contract StablecoinupgradeBeaconToAndCallTest is StablecoinTest {
         assertEq(stablecoin.version(), Stablecoin(address(stablecoinImpl)).VERSION());
 
         StablecoinV2 newImpl = new StablecoinV2();
-        MockBeacon newBeacon = new MockBeacon(address(newImpl));
+        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(newImpl), admin);
 
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
@@ -102,7 +102,7 @@ contract StablecoinupgradeBeaconToAndCallTest is StablecoinTest {
 
         // Upgrade to v2
         StablecoinV2 v2Impl = new StablecoinV2();
-        MockBeacon newBeacon = new MockBeacon(address(v2Impl));
+        TwoStepUpgradeableBeacon newBeacon = new TwoStepUpgradeableBeacon(address(v2Impl), admin);
         vm.prank(admin);
         stablecoin.upgradeBeaconToAndCall(address(newBeacon), "");
         assertEq(stablecoin.version(), v2Impl.VERSION_V2());
