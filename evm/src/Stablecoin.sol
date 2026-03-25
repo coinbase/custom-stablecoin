@@ -64,6 +64,9 @@ contract Stablecoin is
     /// @notice Role required to pause and unpause all token transfers.
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
+    /// @notice The version of the stablecoin implementation.
+    string public constant VERSION = "1.0.0";
+
     /// @notice Emitted when tokens are minted.
     ///
     /// @param minter The address that performed the mint.
@@ -188,7 +191,7 @@ contract Stablecoin is
     ///
     /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
     /// @param data      Optional calldata to forward to the new implementation via delegatecall.
-    function updateBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
         ERC1967Utils.upgradeBeaconToAndCall(newBeacon, data);
     }
 
@@ -201,6 +204,13 @@ contract Stablecoin is
     /// @return The number of decimals.
     function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
         return TokenMetadata.decimals();
+    }
+
+    /// @notice Returns the version of the stablecoin implementation.
+    ///
+    /// @return The version of the stablecoin implementation.
+    function version() public pure virtual returns (string memory) {
+        return VERSION;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -230,7 +240,6 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
         super._update(from, to, value);

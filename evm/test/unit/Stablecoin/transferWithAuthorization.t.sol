@@ -52,18 +52,6 @@ contract StablecoinTransferWithAuthorizationTest is StablecoinTest {
         stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, wrongSig);
     }
 
-    /// @notice Verifies transferWithAuthorization reverts when the relayer (msg.sender) is blocklisted
-    /// @dev AddressBlocklisted(msg.sender): relayer blocklist is the first _update check after auth validation
-    function test_transferWithAuthorization_revert_blocklistedCaller(uint256 amount) public {
-        amount = bound(amount, 1, INITIAL_MINT);
-        bytes32 nonce = bytes32(uint256(42));
-        bytes memory sig = _signTransferAuth(ALICE_KEY, alice, bob, amount, 0, type(uint256).max, nonce);
-        _blocklist(relayer);
-        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, relayer));
-        vm.prank(relayer);
-        stablecoin.transferWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
-    }
-
     /// @notice Verifies transferWithAuthorization reverts when the from address is blocklisted
     /// @dev AddressBlocklisted(from): the token holder/signer is blocked regardless of who relays
     function test_transferWithAuthorization_revert_blocklistedFrom(uint256 amount) public {
