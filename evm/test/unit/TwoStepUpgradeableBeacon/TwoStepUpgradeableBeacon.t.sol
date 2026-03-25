@@ -36,9 +36,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     /// @dev BeaconInvalidImplementation: EOA or empty address must be rejected
     function test_constructor_revert_invalidImplementation(address impl) public {
         vm.assume(impl.code.length == 0);
-        vm.expectRevert(
-            abi.encodeWithSelector(UpgradeableBeacon.BeaconInvalidImplementation.selector, impl)
-        );
+        vm.expectRevert(abi.encodeWithSelector(UpgradeableBeacon.BeaconInvalidImplementation.selector, impl));
         new TwoStepUpgradeableBeacon(impl, admin);
     }
 
@@ -77,9 +75,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
     /// @dev BeaconInvalidImplementation: EOA or empty address must be rejected before the storage write
     function test_upgradeTo_revert_invalidImplementation(address impl) public {
         vm.assume(impl.code.length == 0);
-        vm.expectRevert(
-            abi.encodeWithSelector(UpgradeableBeacon.BeaconInvalidImplementation.selector, impl)
-        );
+        vm.expectRevert(abi.encodeWithSelector(UpgradeableBeacon.BeaconInvalidImplementation.selector, impl));
         vm.prank(admin);
         twoStepBeacon.upgradeTo(impl);
     }
@@ -121,9 +117,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
 
     /// @notice Verifies non-pending owner cannot accept ownership
     /// @dev Security: only the exact pending owner address may call acceptOwnership
-    function test_transferOwnership_revert_nonPendingOwnerCannotAccept(address pendingOwner, address impostor)
-        public
-    {
+    function test_transferOwnership_revert_nonPendingOwnerCannotAccept(address pendingOwner, address impostor) public {
         vm.assume(pendingOwner != address(0) && pendingOwner != admin);
         vm.assume(impostor != pendingOwner);
 
