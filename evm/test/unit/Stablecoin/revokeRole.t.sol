@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {RateLimit} from "src/lib/RateLimit.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
@@ -11,7 +11,7 @@ contract StablecoinRevokeRoleTest is StablecoinTest {
     // ── Happy paths ───────────────────────────────────────────────────────────────────────
 
     /// @notice Verifies revoking MINT_ROLE clears the minter's rate-limit configuration
-    /// @dev Side effect: _removeMinter is called; currentMintLimit(minter) panics after revocation (interval=0)
+    /// @dev Side effect: _remove is called; currentMintLimit(minter) panics after revocation (interval=0)
     function test_revokeRole_success_clearsMinterConfig_whenMintRoleRevoked() public {
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter);
@@ -24,18 +24,18 @@ contract StablecoinRevokeRoleTest is StablecoinTest {
         stablecoin.currentMintLimit(minter);
     }
 
-    /// @notice Verifies revoking MINT_ROLE emits MinterRemoved for the affected minter
-    /// @dev Event integrity: MinterRemoved must be emitted to signal off-chain systems
-    function test_revokeRole_success_emitsMinterRemoved_whenMintRoleRevoked() public {
-        vm.expectEmit(true, false, false, false);
-        emit MintRateLimit.MinterRemoved({minter: minter});
+    /// @notice Verifies revoking MINT_ROLE emits RateLimitRemoved for the affected minter
+    /// @dev Event integrity: RateLimitRemoved must be emitted to signal off-chain systems
+    function test_revokeRole_success_emitsRateLimitRemoved_whenMintRoleRevoked() public {
+        vm.expectEmit(true, true, false, false);
+        emit RateLimit.RateLimitRemoved({key: stablecoin.MINT_RATE_LIMIT_KEY(), account: minter});
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter);
         vm.stopPrank();
     }
 
     /// @notice Verifies revoking any role other than MINT_ROLE does not clear any minter config
-    /// @dev No side effect: _removeMinter must only be called when role == MINT_ROLE
+    /// @dev No side effect: _remove must only be called when role == MINT_ROLE
     function test_revokeRole_success_doesNotClearConfig_forOtherRoles(bytes32 role) public {
         vm.assume(role != stablecoin.MINT_ROLE());
         vm.assume(role != stablecoin.DEFAULT_ADMIN_ROLE());

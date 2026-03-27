@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {RateLimit} from "src/lib/RateLimit.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 import {StablecoinFactory} from "src/StablecoinFactory.sol";
 import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
@@ -74,8 +74,8 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
     /// @notice Verifies the full minter lifecycle: grant → configure → mint → revoke clears config
     /// @dev Integration: revoking MINT_ROLE must zero out the minter's rate-limit and emit MinterRemoved
-    function test_workflow_minterLifecycle(uint256 limit, uint40 interval) public {
-        limit = bound(limit, 1, MINT_LIMIT);
+    function test_workflow_minterLifecycle(uint216 limit, uint40 interval) public {
+        limit = uint216(bound(uint256(limit), 1, MINT_LIMIT));
         vm.assume(interval != 0);
 
         address minter2 = makeAddr("minter2");
@@ -94,8 +94,8 @@ contract StablecoinWorkflowTest is StablecoinTest {
         stablecoin.mint(carol, mintAmount);
 
         // Revoke MINT_ROLE — must emit MinterRemoved and clear config
-        vm.expectEmit(true, false, false, false);
-        emit MintRateLimit.MinterRemoved({minter: minter2});
+        vm.expectEmit(true, true, false, false);
+        emit RateLimit.RateLimitRemoved({key: stablecoin.MINT_RATE_LIMIT_KEY(), account: minter2});
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter2);
         vm.stopPrank();

@@ -17,8 +17,8 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit returns the full configured limit immediately after configuration
     /// @dev State: remaining == limit at configuration time; no elapsed time means no additional replenishment
-    function test_currentMintLimit_success_returnsFullLimitAtStart(uint256 limit) public {
-        limit = bound(limit, 1, type(uint128).max);
+    function test_currentMintLimit_success_returnsFullLimitAtStart(uint216 limit) public {
+        vm.assume(limit != 0);
         address minter2 = makeAddr("minter2");
         vm.startPrank(admin);
         stablecoin.grantRole(stablecoin.MINT_ROLE(), minter2);
@@ -30,8 +30,8 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit reflects linear replenishment proportional to elapsed time
     /// @dev Replenishment: amount = Math.mulDiv(elapsed, limit, interval); partial interval yields partial refill
-    function test_currentMintLimit_success_replenishesOverTime(uint256 limit, uint40 interval, uint256 elapsed) public {
-        limit = bound(limit, 1e6, 1e18);
+    function test_currentMintLimit_success_replenishesOverTime(uint216 limit, uint40 interval, uint256 elapsed) public {
+        limit = uint216(bound(uint256(limit), 1e6, 1e18));
         vm.assume(interval != 0);
         elapsed = bound(elapsed, 1, uint256(type(uint40).max));
 
@@ -66,8 +66,8 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
 
     /// @notice Verifies currentMintLimit never exceeds the configured limit regardless of elapsed time
     /// @dev Cap invariant: Math.min(remaining + replenishment, limit) must always hold
-    function test_currentMintLimit_success_capsAtLimit(uint256 limit, uint40 interval, uint256 elapsed) public {
-        limit = bound(limit, 1, type(uint128).max);
+    function test_currentMintLimit_success_capsAtLimit(uint216 limit, uint40 interval, uint256 elapsed) public {
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         elapsed = bound(elapsed, 0, uint256(type(uint40).max));
 

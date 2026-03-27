@@ -16,7 +16,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 
 import {Blocklist} from "./lib/Blocklist.sol";
 import {ERC3009Upgradeable} from "./lib/ERC3009Upgradeable.sol";
-import {MintRateLimit} from "./lib/MintRateLimit.sol";
+import {RateLimit} from "./lib/RateLimit.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
@@ -29,6 +29,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - MINT_ROLE – can mint tokens up to their configured rate limit.
 ///     After granting, a MINT_RATE_LIMIT_ROLE holder must call {configureMinter}
 ///     to set the rate limit. Revoking MINT_ROLE clears the rate limit.
+///     Rate limits are scoped to {MINT_RATE_LIMIT_KEY} within the {RateLimit} mixin.
 ///   - MINT_RATE_LIMIT_ROLE – can update rate limits for existing minters.
 ///   - BURN_ROLE – can burn their own tokens.
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
@@ -43,7 +44,7 @@ contract Stablecoin is
     ERC3009Upgradeable,
     AccessControlDefaultAdminRulesUpgradeable,
     Blocklist,
-    MintRateLimit,
+    RateLimit,
     TokenMetadata
 {
     /// @notice Role required to mint tokens up to the configured rate limit.
@@ -63,6 +64,9 @@ contract Stablecoin is
 
     /// @notice Role required to pause and unpause all token transfers.
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+
+    /// @notice Rate-limit key scoping mint capacity. Passed to {RateLimit} for all mint-related operations.
+    bytes32 public constant MINT_RATE_LIMIT_KEY = keccak256("MINT_RATE_LIMIT");
 
     /// @notice The version of the stablecoin implementation.
     string public constant VERSION = "1.0.0";
@@ -147,7 +151,7 @@ contract Stablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        _consumeMintLimit({minter: msg.sender, amount: amount});
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
         _mint(to, amount);
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
@@ -193,9 +197,9 @@ contract Stablecoin is
     /// @param minter   Minter address to update.
     /// @param limit    New maximum mint capacity.
     /// @param interval Replenishment interval in seconds.
-    function configureMinter(address minter, uint256 limit, uint40 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
+    function configureMinter(address minter, uint216 limit, uint40 interval) external onlyRole(MINT_RATE_LIMIT_ROLE) {
         _checkRole({role: MINT_ROLE, account: minter});
-        _configureMinter({minter: minter, limit: limit, interval: interval});
+        _configureRateLimit({key: MINT_RATE_LIMIT_KEY, account: minter, limit: limit, interval: interval});
     }
 
     /// @notice Atomically grants `MINT_ROLE` to `minter` and configures its rate-limit in one transaction.
@@ -207,12 +211,12 @@ contract Stablecoin is
     /// @param minter   Address to grant `MINT_ROLE` and configure.
     /// @param limit    Maximum mint capacity.
     /// @param interval Replenishment interval in seconds.
-    function grantMinterRoleWithLimit(address minter, uint256 limit, uint40 interval)
+    function grantMinterRoleWithLimit(address minter, uint216 limit, uint40 interval)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         _grantRole({role: MINT_ROLE, account: minter});
-        _configureMinter({minter: minter, limit: limit, interval: interval});
+        _configureRateLimit({key: MINT_RATE_LIMIT_KEY, account: minter, limit: limit, interval: interval});
     }
 
     /// @notice Updates the blocklist status for `account`.
@@ -263,6 +267,15 @@ contract Stablecoin is
         return TokenMetadata.decimals();
     }
 
+    /// @notice Returns the current mint capacity for `minter`.
+    ///
+    /// @param minter The minter address to query.
+    ///
+    /// @return The current available mint capacity.
+    function currentMintLimit(address minter) public view returns (uint256) {
+        return currentLimit({key: MINT_RATE_LIMIT_KEY, account: minter});
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     INTERNAL FUNCTIONS                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -276,7 +289,7 @@ contract Stablecoin is
     function _revokeRole(bytes32 role, address account) internal override returns (bool) {
         bool revoked = super._revokeRole(role, account);
         if (revoked && role == MINT_ROLE) {
-            _removeMinter({minter: account});
+            _removeRateLimit({key: MINT_RATE_LIMIT_KEY, account: account});
         }
         return revoked;
     }
