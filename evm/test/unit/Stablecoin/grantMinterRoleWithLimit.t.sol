@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MintRateLimit} from "src/lib/MintRateLimit.sol";
+import {RateLimit} from "src/lib/RateLimit.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
@@ -25,21 +25,21 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
     }
 
     /// @notice Verifies grantMinterRoleWithLimit reverts when limit is zero
-    /// @dev InvalidMinterConfig: limit must be non-zero for a valid rate-limit configuration
+    /// @dev InvalidConfig: limit must be non-zero for a valid rate-limit configuration
     function test_grantMinterRoleWithLimit_revert_zeroLimit(address target, uint40 interval) public {
         vm.assume(target != address(0));
         vm.assume(interval != 0);
-        vm.expectRevert(MintRateLimit.InvalidMinterConfig.selector);
+        vm.expectRevert(RateLimit.InvalidConfig.selector);
         vm.prank(admin);
         stablecoin.grantMinterRoleWithLimit(target, 0, interval);
     }
 
     /// @notice Verifies grantMinterRoleWithLimit reverts when interval is zero
-    /// @dev InvalidMinterConfig: interval must be non-zero for a valid rate-limit configuration
-    function test_grantMinterRoleWithLimit_revert_zeroInterval(address target, uint256 limit) public {
+    /// @dev InvalidConfig: interval must be non-zero for a valid rate-limit configuration
+    function test_grantMinterRoleWithLimit_revert_zeroInterval(address target, uint216 limit) public {
         vm.assume(target != address(0));
-        limit = bound(limit, 1, type(uint128).max);
-        vm.expectRevert(MintRateLimit.InvalidMinterConfig.selector);
+        vm.assume(limit != 0);
+        vm.expectRevert(RateLimit.InvalidConfig.selector);
         vm.prank(admin);
         stablecoin.grantMinterRoleWithLimit(target, limit, 0);
     }
@@ -48,9 +48,9 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
 
     /// @notice Verifies grantMinterRoleWithLimit grants MINT_ROLE to the target address
     /// @dev Role grant: hasRole(MINT_ROLE, minter) must be true after the call
-    function test_grantMinterRoleWithLimit_success_grantsRole(address target, uint256 limit, uint40 interval) public {
+    function test_grantMinterRoleWithLimit_success_grantsRole(address target, uint216 limit, uint40 interval) public {
         vm.assume(target != address(0));
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         vm.prank(admin);
         stablecoin.grantMinterRoleWithLimit(target, limit, interval);
@@ -59,11 +59,11 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
 
     /// @notice Verifies grantMinterRoleWithLimit sets the rate-limit so currentMintLimit equals limit
     /// @dev Config: currentMintLimit(minter) must equal the configured limit immediately after the call
-    function test_grantMinterRoleWithLimit_success_configuresMintLimit(address target, uint256 limit, uint40 interval)
+    function test_grantMinterRoleWithLimit_success_configuresMintLimit(address target, uint216 limit, uint40 interval)
         public
     {
         vm.assume(target != address(0));
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         vm.prank(admin);
         stablecoin.grantMinterRoleWithLimit(target, limit, interval);
@@ -72,8 +72,8 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
 
     /// @notice Verifies the minter can mint immediately after grantMinterRoleWithLimit without a separate configure step
     /// @dev Atomicity: the minter must not revert with MinterNotConfigured on the first mint call
-    function test_grantMinterRoleWithLimit_success_canMintImmediately(uint256 limit, uint40 interval) public {
-        limit = bound(limit, 1, type(uint128).max);
+    function test_grantMinterRoleWithLimit_success_canMintImmediately(uint216 limit, uint40 interval) public {
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         address newMinter = makeAddr("newMinter");
         vm.prank(admin);
@@ -83,17 +83,19 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
         assertEq(stablecoin.balanceOf(alice), INITIAL_MINT + 1);
     }
 
-    /// @notice Verifies grantMinterRoleWithLimit emits both RoleGranted and MinterConfigured
+    /// @notice Verifies grantMinterRoleWithLimit emits both RoleGranted and RateLimitConfigured
     /// @dev Event integrity: both events must fire with the correct arguments in a single call
-    function test_grantMinterRoleWithLimit_success_emitsEvents(address target, uint256 limit, uint40 interval) public {
+    function test_grantMinterRoleWithLimit_success_emitsEvents(address target, uint216 limit, uint40 interval) public {
         vm.assume(target != address(0));
         vm.assume(!stablecoin.hasRole(stablecoin.MINT_ROLE(), target));
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         vm.expectEmit(true, true, true, true);
         emit IAccessControl.RoleGranted(stablecoin.MINT_ROLE(), target, admin);
-        vm.expectEmit(true, false, false, true);
-        emit MintRateLimit.MinterConfigured({minter: target, limit: limit, interval: interval});
+        vm.expectEmit(true, true, false, true);
+        emit RateLimit.RateLimitConfigured({
+            key: stablecoin.MINT_RATE_LIMIT_KEY(), account: target, limit: limit, interval: interval
+        });
         vm.prank(admin);
         stablecoin.grantMinterRoleWithLimit(target, limit, interval);
     }
@@ -101,13 +103,13 @@ contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
     /// @notice Verifies grantMinterRoleWithLimit is idempotent for the role grant when called twice
     /// @dev Role idempotency: granting an already-held role updates the config without error
     function test_grantMinterRoleWithLimit_success_idempotentRoleGrant(
-        uint256 limit1,
+        uint216 limit1,
         uint40 interval1,
-        uint256 limit2,
+        uint216 limit2,
         uint40 interval2
     ) public {
-        limit1 = bound(limit1, 1, type(uint128).max);
-        limit2 = bound(limit2, 1, type(uint128).max);
+        vm.assume(limit1 != 0);
+        vm.assume(limit2 != 0);
         vm.assume(interval1 != 0);
         vm.assume(interval2 != 0);
         address newMinter = makeAddr("newMinter");

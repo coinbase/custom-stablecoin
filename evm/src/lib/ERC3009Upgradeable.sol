@@ -25,7 +25,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.ERC3009Upgradeable")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant ERC3009_STORAGE_LOCATION =
+    bytes32 private constant _ERC3009_STORAGE_LOCATION =
         0xb8aebb83576e62291cd82363e38e83ae9b2360a49a089992dbdffe80b8e41600;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -343,7 +343,7 @@ abstract contract ERC3009Upgradeable is ERC20Upgradeable, EIP712Upgradeable {
     /// @return $ Storage pointer to the layout struct.
     function _getERC3009Layout() private pure returns (ERC3009Layout storage $) {
         assembly {
-            $.slot := ERC3009_STORAGE_LOCATION
+            $.slot := _ERC3009_STORAGE_LOCATION
         }
     }
 }

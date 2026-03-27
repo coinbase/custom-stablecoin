@@ -49,7 +49,7 @@ contract StablecoinTest is Test {
     string internal constant TOKEN_NAME = "Test USD";
     string internal constant TOKEN_SYMBOL = "TUSD";
     uint8 internal constant TOKEN_DECIMALS = 6;
-    uint256 internal constant MINT_LIMIT = 1_000_000e6;
+    uint216 internal constant MINT_LIMIT = 1_000_000e6;
     uint40 internal constant MINT_INTERVAL = 1 days;
     uint256 internal constant INITIAL_MINT = 100_000e6;
 

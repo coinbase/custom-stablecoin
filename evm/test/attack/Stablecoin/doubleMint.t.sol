@@ -8,7 +8,7 @@ import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 /// of partial mints and timing can grant more capacity than the configured limit allows within
 /// a single interval.
 contract StablecoinDoubleMintTest is StablecoinTest {
-    uint256 internal constant LIMIT = 100e6;
+    uint216 internal constant LIMIT = 100e6;
     uint40 internal constant INTERVAL = 1 days;
 
     address internal minter2;

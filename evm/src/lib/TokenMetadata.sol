@@ -21,7 +21,7 @@ abstract contract TokenMetadata is Initializable {
     }
 
     // keccak256(abi.encode(uint256(keccak256("coinbase.storage.Stablecoin.Metadata")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant METADATA_STORAGE_LOCATION =
+    bytes32 private constant _METADATA_STORAGE_LOCATION =
         0xa3459737885856abeeb2a475f81a26ad8d8ccc56bd90faa293afd170849e1600;
 
     uint8 internal constant MIN_DECIMALS = 6;
@@ -91,7 +91,7 @@ abstract contract TokenMetadata is Initializable {
     /// @return $ Storage pointer to the layout struct.
     function _getMetadataLayout() private pure returns (MetadataLayout storage $) {
         assembly {
-            $.slot := METADATA_STORAGE_LOCATION
+            $.slot := _METADATA_STORAGE_LOCATION
         }
     }
 }
