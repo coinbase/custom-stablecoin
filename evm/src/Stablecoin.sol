@@ -118,6 +118,8 @@ contract Stablecoin is
 
     /// @notice Transfers `amount` tokens from the caller to `to` with a memo.
     ///
+    /// @dev The {Memo} event is emitted immediately after the ERC-20 {Transfer} event.
+    ///
     /// @param to     Recipient address.
     /// @param amount Number of tokens to transfer.
     /// @param memo   The memo associated with the transfer.
@@ -127,6 +129,8 @@ contract Stablecoin is
     }
 
     /// @notice Transfers `amount` tokens from `from` to `to` with a memo.
+    ///
+    /// @dev The {Memo} event is emitted immediately after the ERC-20 {Transfer} event.
     ///
     /// @param from   Sender address.
     /// @param to     Recipient address.
@@ -150,6 +154,8 @@ contract Stablecoin is
 
     /// @notice Mints `amount` tokens to `to` with a memo.
     ///
+    /// @dev The {Memo} event is emitted immediately after the ERC-20 {Transfer} event.
+    ///
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     /// @param memo   The memo associated with the mint.
@@ -169,6 +175,8 @@ contract Stablecoin is
     }
 
     /// @notice Burns `amount` tokens from the caller's balance with a memo.
+    ///
+    /// @dev The {Memo} event is emitted immediately after the ERC-20 {Transfer} event.
     ///
     /// @param amount Number of tokens to burn.
     /// @param memo   The memo associated with the burn.
