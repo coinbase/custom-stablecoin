@@ -156,8 +156,8 @@ contract Stablecoin is
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external onlyRole(MINT_ROLE) {
         _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
         _mint(to, amount);
-        emit Minted({minter: msg.sender, to: to, amount: amount});
         emit Memo({memo: memo});
+        emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
@@ -174,8 +174,8 @@ contract Stablecoin is
     /// @param memo   The memo associated with the burn.
     function burnWithMemo(uint256 amount, bytes32 memo) external onlyRole(BURN_ROLE) {
         _burn(msg.sender, amount);
-        emit Burned({burner: msg.sender, amount: amount});
         emit Memo({memo: memo});
+        emit Burned({burner: msg.sender, amount: amount});
     }
 
     /// @notice Updates an existing minter's rate-limit configuration.
