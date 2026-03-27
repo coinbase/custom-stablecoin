@@ -80,6 +80,11 @@ contract Stablecoin is
     /// @param amount The number of tokens burned.
     event Burned(address indexed burner, uint256 amount);
 
+    /// @notice Emitted when a memo is attached to a mint, burn, or transfer.
+    ///
+    /// @param memo The memo that was attached.
+    event Memo(bytes32 indexed memo);
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -111,6 +116,28 @@ contract Stablecoin is
         __ERC20Pausable_init();
     }
 
+    /// @notice Transfers `amount` tokens from the caller to `to` with a memo.
+    ///
+    /// @param to     Recipient address.
+    /// @param amount Number of tokens to transfer.
+    /// @param memo   The memo associated with the transfer.
+    function transferWithMemo(address to, uint256 amount, bytes32 memo) external {
+        _transfer({from: msg.sender, to: to, value: amount});
+        emit Memo({memo: memo});
+    }
+
+    /// @notice Transfers `amount` tokens from `from` to `to` with a memo.
+    ///
+    /// @param from   Sender address.
+    /// @param to     Recipient address.
+    /// @param amount Number of tokens to transfer.
+    /// @param memo   The memo associated with the transfer.
+    function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external {
+        _spendAllowance({owner: from, spender: msg.sender, value: amount});
+        _transfer({from: from, to: to, value: amount});
+        emit Memo({memo: memo});
+    }
+
     /// @notice Mints `amount` tokens to `to`.
     ///
     /// @param to     Recipient address.
@@ -121,12 +148,34 @@ contract Stablecoin is
         emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
+    /// @notice Mints `amount` tokens to `to` with a memo.
+    ///
+    /// @param to     Recipient address.
+    /// @param amount Number of tokens to mint.
+    /// @param memo   The memo associated with the mint.
+    function mintWithMemo(address to, uint256 amount, bytes32 memo) external onlyRole(MINT_ROLE) {
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
+        _mint(to, amount);
+        emit Minted({minter: msg.sender, to: to, amount: amount});
+        emit Memo({memo: memo});
+    }
+
     /// @notice Burns `amount` tokens from the caller's balance.
     ///
     /// @param amount Number of tokens to burn.
     function burn(uint256 amount) external onlyRole(BURN_ROLE) {
         _burn(msg.sender, amount);
         emit Burned({burner: msg.sender, amount: amount});
+    }
+
+    /// @notice Burns `amount` tokens from the caller's balance with a memo.
+    ///
+    /// @param amount Number of tokens to burn.
+    /// @param memo   The memo associated with the burn.
+    function burnWithMemo(uint256 amount, bytes32 memo) external onlyRole(BURN_ROLE) {
+        _burn(msg.sender, amount);
+        emit Burned({burner: msg.sender, amount: amount});
+        emit Memo({memo: memo});
     }
 
     /// @notice Updates an existing minter's rate-limit configuration.
