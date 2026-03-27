@@ -49,10 +49,10 @@ contract StablecoinMintWithMemoTest is StablecoinTest {
     /// @notice Verifies mintWithMemo emits both Minted and Memo events
     function test_mintWithMemo_success_emitsEvents(uint256 amount, bytes32 memo) public {
         amount = bound(amount, 1, stablecoin.currentMintLimit(minter));
-        vm.expectEmit(true, true, false, true);
-        emit Stablecoin.Minted({minter: minter, to: alice, amount: amount});
         vm.expectEmit(true, false, false, false);
         emit Stablecoin.Memo({memo: memo});
+        vm.expectEmit(true, true, false, true);
+        emit Stablecoin.Minted({minter: minter, to: alice, amount: amount});
         vm.prank(minter);
         stablecoin.mintWithMemo(alice, amount, memo);
     }

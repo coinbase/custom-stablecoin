@@ -58,10 +58,10 @@ contract StablecoinBurnWithMemoTest is StablecoinTest {
     /// @notice Verifies burnWithMemo emits both Burned and Memo events
     function test_burnWithMemo_success_emitsEvents(uint256 amount, bytes32 memo) public {
         amount = bound(amount, 1, INITIAL_MINT);
-        vm.expectEmit(true, false, false, true);
-        emit Stablecoin.Burned({burner: burner, amount: amount});
         vm.expectEmit(true, false, false, false);
         emit Stablecoin.Memo({memo: memo});
+        vm.expectEmit(true, false, false, true);
+        emit Stablecoin.Burned({burner: burner, amount: amount});
         vm.prank(burner);
         stablecoin.burnWithMemo(amount, memo);
     }
