@@ -63,6 +63,18 @@ contract StablecoinTransferWithMemoTest is StablecoinTest {
 
     // ── transferFromWithMemo reverts ──────────────────────────────────────────────────────
 
+    /// @notice Verifies transferFromWithMemo reverts when the caller (spender) is blocklisted
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(msg.sender) is the first check in _update
+    function test_transferFromWithMemo_revert_callerBlocklisted(uint256 amount) public {
+        amount = bound(amount, 1, INITIAL_MINT);
+        vm.prank(alice);
+        stablecoin.approve(carol, amount);
+        _blocklist(carol);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, carol));
+        vm.prank(carol);
+        stablecoin.transferFromWithMemo(alice, bob, amount, MEMO);
+    }
+
     /// @notice Verifies transferFromWithMemo reverts when the from address is blocklisted
     function test_transferFromWithMemo_revert_fromBlocklisted(uint256 amount) public {
         amount = bound(amount, 1, INITIAL_MINT);
