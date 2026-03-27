@@ -53,10 +53,10 @@ contract StablecoinReorgTest is StablecoinTest {
 
     /// @notice Verifies a rolled-back timestamp cannot inflate the replenished amount beyond the limit
     /// @dev Overflow protection: very large elapsed values must be capped; no replenishment > config.limit
-    function test_attack_reorg_mintRateLimit_timestampRollbackCannotInflateCapacity(uint256 limit, uint40 interval)
+    function test_attack_reorg_mintRateLimit_timestampRollbackCannotInflateCapacity(uint216 limit, uint40 interval)
         public
     {
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
 
         address minter2 = makeAddr("minter2");
@@ -76,10 +76,10 @@ contract StablecoinReorgTest is StablecoinTest {
 
     /// @notice Verifies that replenishment with extremely large elapsed time is capped at the configured limit
     /// @dev Cap invariant: Math.min(..., limit) prevents overflow and ensures capacity <= limit always holds
-    function test_attack_reorg_mintRateLimit_overflowProtection(uint256 limit, uint40 interval, uint256 elapsed)
+    function test_attack_reorg_mintRateLimit_overflowProtection(uint216 limit, uint40 interval, uint256 elapsed)
         public
     {
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         elapsed = bound(elapsed, 0, uint256(type(uint40).max));
 

@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @title RateLimit
-/// @author Coinbase
 /// @notice ERC-7201 namespaced storage and logic for key-scoped, account-level rate limiting.
 ///
 /// @dev Each (key, account) pair has an independent capacity that replenishes linearly over a
@@ -14,21 +13,23 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 /// Multiple independent rate limits can coexist within one contract by passing distinct keys
 /// (e.g. `keccak256("MINT_RATE_LIMIT")`). The outer map is keyed by feature; the inner map
 /// is keyed by account.
+/// @author Coinbase
 abstract contract RateLimit {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                ERC-7201 NAMESPACED STORAGE                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Rate-limit configuration for a single (key, account) pair.
+    /// @dev Packed into two 256-bit slots: (`limit` + `interval`) and (`remaining` + `lastConsumed`).
     struct RateLimitConfig {
-        /// @dev The maximum capacity the account can accumulate under this key.
+        /// @dev Maximum capacity the account can accumulate. Packed with `interval`.
         uint216 limit;
-        /// @dev The replenishment interval in seconds. Packed with `lastConsumed`.
+        /// @dev Replenishment interval in seconds. Packed with `limit`.
         uint40 interval;
-        /// @dev The current remaining capacity.
+        /// @dev Current remaining capacity. Packed with `lastConsumed`.
         uint216 remaining;
-        /// @dev The unix timestamp (seconds) used as the replenishment anchor; updated on every
-        ///      consumption and initialised to the configuration time. Packed with `interval`.
+        /// @dev Replenishment anchor timestamp (seconds); set on configure and every consumption.
+        ///      Packed with `remaining`.
         uint40 lastConsumed;
     }
 
@@ -135,7 +136,6 @@ abstract contract RateLimit {
         if (amount > currentLimit_) {
             revert LimitExceeded({key: key, account: account, amount: amount, remaining: currentLimit_});
         }
-
 
         // Safe: amount <= currentLimit_ is enforced above, and currentLimit_ fits in uint192.
         config.remaining = uint216(currentLimit_ - amount);

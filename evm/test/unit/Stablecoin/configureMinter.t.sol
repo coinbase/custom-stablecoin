@@ -51,9 +51,9 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter reverts when interval is zero
     /// @dev InvalidConfig: both limit and interval must be non-zero for a valid config
-    function test_configureMinter_revert_zeroInterval(address target, uint256 limit) public {
+    function test_configureMinter_revert_zeroInterval(address target, uint216 limit) public {
         vm.assume(target != minter && target != address(0));
-        limit = bound(limit, 1, type(uint128).max);
+        vm.assume(limit != 0);
         vm.startPrank(admin);
         stablecoin.grantRole(stablecoin.MINT_ROLE(), target);
         vm.stopPrank();
@@ -66,8 +66,8 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter stores the new limit and interval for the minter
     /// @dev State: currentMintLimit(minter) equals the new limit immediately after configuration
-    function test_configureMinter_success_updatesConfig(uint256 limit, uint40 interval) public {
-        limit = bound(limit, 1, type(uint128).max);
+    function test_configureMinter_success_updatesConfig(uint216 limit, uint40 interval) public {
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         vm.prank(rateLimitAdmin);
         stablecoin.configureMinter(minter, limit, interval);
@@ -76,8 +76,8 @@ contract StablecoinConfigureMinterTest is StablecoinTest {
 
     /// @notice Verifies configureMinter emits RateLimitConfigured with the correct key, minter, limit, and interval
     /// @dev Event integrity: all four fields must match the arguments passed to configureMinter
-    function test_configureMinter_success_emitsRateLimitConfigured(uint256 limit, uint40 interval) public {
-        limit = bound(limit, 1, type(uint128).max);
+    function test_configureMinter_success_emitsRateLimitConfigured(uint216 limit, uint40 interval) public {
+        vm.assume(limit != 0);
         vm.assume(interval != 0);
         vm.expectEmit(true, true, false, true);
         emit RateLimit.RateLimitConfigured({

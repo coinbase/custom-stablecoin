@@ -12,10 +12,10 @@ import {MutableBeaconProxy} from "./MutableBeaconProxy.sol";
 import {Stablecoin} from "./Stablecoin.sol";
 
 /// @title StablecoinFactory
-/// @author Coinbase
 /// @notice UUPS-upgradeable factory that deploys {MutableBeaconProxy} proxies pointing to a shared {Stablecoin} implementation.
 ///
 /// @dev The beacon is fixed at construction time as an immutable and cannot be changed.
+/// @author Coinbase
 ///
 /// Roles:
 ///   - DEFAULT_ADMIN_ROLE – can upgrade the factory and manage roles

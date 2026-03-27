@@ -20,7 +20,6 @@ import {RateLimit} from "./lib/RateLimit.sol";
 import {TokenMetadata} from "./lib/TokenMetadata.sol";
 
 /// @title Stablecoin
-/// @author Coinbase
 /// @notice Stablecoin implementation, upgradeable via a beacon proxy.
 ///
 /// @dev Roles:
@@ -36,6 +35,7 @@ import {TokenMetadata} from "./lib/TokenMetadata.sol";
 ///   - PAUSE_ROLE – can pause/unpause all transfers.
 ///   - BLOCKLIST_ROLE – can update blocklist status for addresses.
 ///   - METADATA_ROLE – can update the contract-level metadata URI (ERC-7572).
+/// @author Coinbase
 contract Stablecoin is
     Initializable,
     ERC20Upgradeable,
@@ -67,6 +67,9 @@ contract Stablecoin is
 
     /// @notice Rate-limit key scoping mint capacity. Passed to {RateLimit} for all mint-related operations.
     bytes32 public constant MINT_RATE_LIMIT_KEY = keccak256("MINT_RATE_LIMIT");
+
+    /// @notice The version of the stablecoin implementation.
+    string public constant VERSION = "1.0.0";
 
     /// @notice Emitted when tokens are minted.
     ///
@@ -151,7 +154,7 @@ contract Stablecoin is
     /// @param minter   Address to grant `MINT_ROLE` and configure.
     /// @param limit    Maximum mint capacity.
     /// @param interval Replenishment interval in seconds.
-    function grantMinterRoleWithLimit(address minter, uint256 limit, uint40 interval)
+    function grantMinterRoleWithLimit(address minter, uint216 limit, uint40 interval)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
@@ -192,7 +195,7 @@ contract Stablecoin is
     ///
     /// @param newBeacon The new beacon contract address. Must implement `IBeacon`.
     /// @param data      Optional calldata to forward to the new implementation via delegatecall.
-    function updateBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeBeaconToAndCall(address newBeacon, bytes calldata data) external onlyRole(DEFAULT_ADMIN_ROLE) {
         ERC1967Utils.upgradeBeaconToAndCall(newBeacon, data);
     }
 
@@ -243,7 +246,6 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
         super._update(from, to, value);
