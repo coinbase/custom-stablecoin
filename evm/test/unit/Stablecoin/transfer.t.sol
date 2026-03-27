@@ -21,6 +21,18 @@ contract StablecoinTransferTest is StablecoinTest {
         stablecoin.transfer(bob, amount);
     }
 
+    /// @notice Verifies transferFrom reverts when the caller (spender) is blocklisted but differs from from
+    /// @dev AddressBlocklisted: _requireNotBlocklisted(msg.sender) is the first check in _update
+    function test_transferFrom_revert_callerBlocklisted(uint256 amount) public {
+        amount = bound(amount, 1, INITIAL_MINT);
+        vm.prank(alice);
+        stablecoin.approve(carol, amount);
+        _blocklist(carol);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.AddressBlocklisted.selector, carol));
+        vm.prank(carol);
+        stablecoin.transferFrom(alice, bob, amount);
+    }
+
     /// @notice Verifies transferFrom reverts when the from address is blocklisted and differs from caller
     /// @dev AddressBlocklisted: _requireNotBlocklisted(from) fires for the token holder; tested via transferFrom
     function test_transfer_revert_fromBlocklisted(uint256 amount) public {

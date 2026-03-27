@@ -303,6 +303,7 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
+        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
         super._update(from, to, value);
