@@ -127,4 +127,21 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
         vm.prank(impostor);
         twoStepBeacon.acceptOwnership();
     }
+
+    // ── renounceOwnership ─────────────────────────────────────────────────────────────────
+
+    /// @notice Verifies renounceOwnership always reverts, even when called by the owner
+    function test_renounceOwnership_revert_disabled() public {
+        vm.expectRevert(TwoStepUpgradeableBeacon.RenounceOwnershipDisabled.selector);
+        vm.prank(admin);
+        twoStepBeacon.renounceOwnership();
+    }
+
+    /// @notice Verifies renounceOwnership reverts with OwnableUnauthorizedAccount for non-owners
+    function test_renounceOwnership_revert_unauthorized(address caller) public {
+        vm.assume(caller != admin);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, caller));
+        vm.prank(caller);
+        twoStepBeacon.renounceOwnership();
+    }
 }

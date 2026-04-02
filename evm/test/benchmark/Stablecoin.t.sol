@@ -53,11 +53,11 @@ contract StablecoinBenchmarkTest is StablecoinTest {
         stablecoin.receiveWithAuthorization(alice, bob, amount, 0, type(uint256).max, nonce, sig);
     }
 
-    /// @notice Measures gas for an updateBlocklistStatus call that blocklists a previously clean address
+    /// @notice Measures gas for a blocklist call that blocklists a previously clean address
     /// @dev Isolated: single storage write; regression guard for the blocklist path
-    function test_benchmark_updateBlocklistStatus() public {
+    function test_benchmark_blocklist() public {
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(carol, true);
+        stablecoin.blocklist(carol);
     }
 
     // ── First vs. subsequent operation ───────────────────────────────────────────────────

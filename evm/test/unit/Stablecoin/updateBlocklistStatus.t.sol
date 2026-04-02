@@ -7,12 +7,11 @@ import {Blocklist} from "src/lib/Blocklist.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
-contract StablecoinUpdateBlocklistStatusTest is StablecoinTest {
-    // ── Reverts ───────────────────────────────────────────────────────────────────────────
+contract StablecoinBlocklistTest is StablecoinTest {
+    // ── blocklist() reverts ──────────────────────────────────────────────────────────────
 
-    /// @notice Verifies updateBlocklistStatus reverts for any caller without BLOCKLIST_ROLE
-    /// @dev Access control: onlyRole(BLOCKLIST_ROLE) must reject all unauthorized callers
-    function test_updateBlocklistStatus_revert_unauthorized(address caller) public {
+    /// @notice Verifies blocklist reverts for any caller without BLOCKLIST_ROLE
+    function test_blocklist_revert_unauthorized(address caller) public {
         vm.assume(caller != blocklister);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -20,44 +19,71 @@ contract StablecoinUpdateBlocklistStatusTest is StablecoinTest {
             )
         );
         vm.prank(caller);
-        stablecoin.updateBlocklistStatus(alice, true);
+        stablecoin.blocklist(alice);
     }
 
-    /// @notice Verifies updateBlocklistStatus reverts when attempting to blocklist the zero address
-    /// @dev CannotBlocklistZeroAddress: minting/burning use address(0) as a sentinel; blocklisting it would break those paths
-    function test_updateBlocklistStatus_revert_zeroAddress() public {
+    /// @notice Verifies blocklist reverts when attempting to blocklist the zero address
+    function test_blocklist_revert_zeroAddress() public {
         vm.expectRevert(Blocklist.CannotBlocklistZeroAddress.selector);
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(address(0), true);
+        stablecoin.blocklist(address(0));
     }
 
-    /// @notice Verifies updateBlocklistStatus reverts when the account's status is already set to the requested value
-    /// @dev BlocklistStatusUnchanged: prevents no-op writes and misleading event emissions
-    function test_updateBlocklistStatus_revert_statusUnchanged(address account, bool blocklisted) public {
+    /// @notice Verifies blocklist reverts when the account is already blocklisted
+    function test_blocklist_revert_statusUnchanged(address account) public {
         vm.assume(account != address(0));
-        if (blocklisted) {
-            vm.prank(blocklister);
-            stablecoin.updateBlocklistStatus(account, true);
-        }
-        vm.expectRevert(abi.encodeWithSelector(Blocklist.BlocklistStatusUnchanged.selector, account, blocklisted));
+        _blocklist(account);
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.BlocklistStatusUnchanged.selector, account, true));
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(account, blocklisted);
+        stablecoin.blocklist(account);
     }
 
-    // ── Happy paths ───────────────────────────────────────────────────────────────────────
+    // ── blocklist() happy paths ──────────────────────────────────────────────────────────
 
-    /// @notice Verifies updateBlocklistStatus correctly marks an address as blocklisted
-    /// @dev State: isBlocklisted(account) returns true after blocklisting; transfers to/from account revert
-    function test_updateBlocklistStatus_success_blocklists(address account) public {
+    /// @notice Verifies blocklist correctly marks an address as blocklisted
+    function test_blocklist_success_blocklists(address account) public {
         vm.assume(account != address(0));
         assertFalse(stablecoin.isBlocklisted(account));
         _blocklist(account);
         assertTrue(stablecoin.isBlocklisted(account));
     }
 
-    /// @notice Verifies updateBlocklistStatus correctly removes an address from the blocklist
-    /// @dev State: isBlocklisted(account) returns false after unblocklisting; transfers resume
-    function test_updateBlocklistStatus_success_unblocklists(address account) public {
+    /// @notice Verifies blocklist emits BlocklistStatusUpdated with blocklisted=true
+    function test_blocklist_success_emitsEvent(address account) public {
+        vm.assume(account != address(0));
+        vm.expectEmit(true, false, false, true);
+        emit Blocklist.BlocklistStatusUpdated({account: account, blocklisted: true});
+        vm.prank(blocklister);
+        stablecoin.blocklist(account);
+    }
+
+    // ── unblocklist() reverts ────────────────────────────────────────────────────────────
+
+    /// @notice Verifies unblocklist reverts for any caller without UNBLOCKLIST_ROLE
+    function test_unblocklist_revert_unauthorized(address caller) public {
+        vm.assume(caller != blocklister);
+        _blocklist(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, caller, stablecoin.UNBLOCKLIST_ROLE()
+            )
+        );
+        vm.prank(caller);
+        stablecoin.unblocklist(alice);
+    }
+
+    /// @notice Verifies unblocklist reverts when the account is not currently blocklisted
+    function test_unblocklist_revert_statusUnchanged(address account) public {
+        vm.assume(account != address(0));
+        vm.expectRevert(abi.encodeWithSelector(Blocklist.BlocklistStatusUnchanged.selector, account, false));
+        vm.prank(blocklister);
+        stablecoin.unblocklist(account);
+    }
+
+    // ── unblocklist() happy paths ────────────────────────────────────────────────────────
+
+    /// @notice Verifies unblocklist correctly removes an address from the blocklist
+    function test_unblocklist_success_unblocklists(address account) public {
         vm.assume(account != address(0));
         _blocklist(account);
         assertTrue(stablecoin.isBlocklisted(account));
@@ -65,17 +91,13 @@ contract StablecoinUpdateBlocklistStatusTest is StablecoinTest {
         assertFalse(stablecoin.isBlocklisted(account));
     }
 
-    /// @notice Verifies updateBlocklistStatus emits BlocklistStatusUpdated with the correct account and status
-    /// @dev Event integrity: account and blocklisted must match the arguments exactly
-    function test_updateBlocklistStatus_success_emitsEvent(address account, bool blocklisted) public {
+    /// @notice Verifies unblocklist emits BlocklistStatusUpdated with blocklisted=false
+    function test_unblocklist_success_emitsEvent(address account) public {
         vm.assume(account != address(0));
-        if (!blocklisted) {
-            vm.prank(blocklister);
-            stablecoin.updateBlocklistStatus(account, true);
-        }
+        _blocklist(account);
         vm.expectEmit(true, false, false, true);
-        emit Blocklist.BlocklistStatusUpdated({account: account, blocklisted: blocklisted});
+        emit Blocklist.BlocklistStatusUpdated({account: account, blocklisted: false});
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(account, blocklisted);
+        stablecoin.unblocklist(account);
     }
 }

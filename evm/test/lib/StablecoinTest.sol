@@ -91,7 +91,9 @@ contract StablecoinTest is Test {
         stablecoin.grantRole(stablecoin.BURN_ROLE(), burner);
         stablecoin.grantRole(stablecoin.MINT_RATE_LIMIT_ROLE(), rateLimitAdmin);
         stablecoin.grantRole(stablecoin.BLOCKLIST_ROLE(), blocklister);
+        stablecoin.grantRole(stablecoin.UNBLOCKLIST_ROLE(), blocklister);
         stablecoin.grantRole(stablecoin.PAUSE_ROLE(), pauser);
+        stablecoin.grantRole(stablecoin.UNPAUSE_ROLE(), pauser);
         stablecoin.grantRole(stablecoin.METADATA_ROLE(), metadataAdmin);
         vm.stopPrank();
 
@@ -156,13 +158,13 @@ contract StablecoinTest is Test {
     /// @dev Blocklists `account` as the blocklister.
     function _blocklist(address account) internal {
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(account, true);
+        stablecoin.blocklist(account);
     }
 
     /// @dev Unblocklists `account` as the blocklister.
     function _unblocklist(address account) internal {
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(account, false);
+        stablecoin.unblocklist(account);
     }
 
     // ── EIP-712 digest helpers ────────────────────────────────────────────────────────────

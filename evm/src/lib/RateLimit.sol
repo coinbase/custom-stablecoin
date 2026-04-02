@@ -62,14 +62,6 @@ abstract contract RateLimit {
     /// @param account The account address that was removed.
     event RateLimitRemoved(bytes32 indexed key, address indexed account);
 
-    /// @notice Emitted when an account's capacity is replenished.
-    ///
-    /// @param key       The feature key scoping this rate limit.
-    /// @param account   The account address.
-    /// @param amount    The amount added during replenishment.
-    /// @param remaining The remaining capacity after replenishment.
-    event LimitReplenished(bytes32 indexed key, address indexed account, uint256 amount, uint256 remaining);
-
     /// @notice Emitted when an account's capacity is consumed.
     ///
     /// @param key       The feature key scoping this rate limit.
@@ -93,7 +85,7 @@ abstract contract RateLimit {
     ///
     /// @param key     The feature key scoping this rate limit.
     /// @param account The account address that has no configuration.
-    error NotConfigured(bytes32 key, address account);
+    error RateLimitNotConfigured(bytes32 key, address account);
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      PUBLIC FUNCTIONS                      */
@@ -107,6 +99,8 @@ abstract contract RateLimit {
     /// @return The current available capacity.
     function currentLimit(bytes32 key, address account) public view virtual returns (uint256) {
         RateLimitConfig storage config = _getRateLimitLayout().limits[key][account];
+
+        if (config.interval == 0) revert RateLimitNotConfigured({key: key, account: account});
 
         uint256 elapsed = block.timestamp - config.lastConsumed;
         // Restores a percentage of the limit based on elapsed time and the interval.
@@ -129,15 +123,13 @@ abstract contract RateLimit {
     function _consumeLimit(bytes32 key, address account, uint256 amount) internal {
         RateLimitConfig storage config = _getRateLimitLayout().limits[key][account];
 
-        if (config.interval == 0) revert NotConfigured({key: key, account: account});
-
         // Get the current available capacity at this moment.
         uint256 currentLimit_ = currentLimit(key, account);
         if (amount > currentLimit_) {
             revert LimitExceeded({key: key, account: account, amount: amount, remaining: currentLimit_});
         }
 
-        // Safe: amount <= currentLimit_ is enforced above, and currentLimit_ fits in uint192.
+        // Safe: amount <= currentLimit_ is enforced above, and currentLimit_ fits in uint216.
         config.remaining = uint216(currentLimit_ - amount);
         config.lastConsumed = uint40(block.timestamp);
 
@@ -145,6 +137,8 @@ abstract contract RateLimit {
     }
 
     /// @notice Sets or replaces the rate-limit configuration for `account` under `key`.
+    ///
+    /// @dev Configuring a new limit resets the remaining capacity to the full limit.
     ///
     /// @param key      The feature key scoping this rate limit.
     /// @param account  The account address to configure.

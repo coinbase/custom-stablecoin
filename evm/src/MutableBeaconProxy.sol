@@ -3,7 +3,6 @@ pragma solidity 0.8.30;
 
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
-import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 
 /// @title MutableBeaconProxy
 /// @notice A {BeaconProxy} variant whose beacon address can be changed after

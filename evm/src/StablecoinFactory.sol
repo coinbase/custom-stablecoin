@@ -14,7 +14,8 @@ import {Stablecoin} from "./Stablecoin.sol";
 /// @title StablecoinFactory
 /// @notice UUPS-upgradeable factory that deploys {MutableBeaconProxy} proxies pointing to a shared {Stablecoin} implementation.
 ///
-/// @dev The beacon is fixed at construction time as an immutable and cannot be changed.
+/// @dev The beacon is set at construction time as an immutable. Note that upgrading the
+/// factory implementation via UUPS will adopt the new implementation's BEACON value.
 /// @author Coinbase
 ///
 /// Roles:
@@ -34,7 +35,14 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
 
     /// @notice Emitted when a new stablecoin is deployed.
     /// @param stablecoin  The address of the new stablecoin.
-    event StablecoinDeployed(address indexed stablecoin);
+    event StablecoinDeployed(
+        address indexed stablecoin,
+        string name,
+        string symbol,
+        uint8 decimals,
+        address indexed stablecoinAdmin,
+        bytes32 indexed salt
+    );
 
     /// @notice Thrown when the factory is constructed without a beacon address.
     error BeaconNotSet();
@@ -85,7 +93,14 @@ contract StablecoinFactory is Initializable, AccessControlDefaultAdminRulesUpgra
     {
         stablecoin =
             Create2.deploy({amount: 0, salt: salt, bytecode: _bytecode(name, symbol, decimals, stablecoinAdmin)});
-        emit StablecoinDeployed(stablecoin);
+        emit StablecoinDeployed({
+            stablecoin: stablecoin,
+            name: name,
+            symbol: symbol,
+            decimals: decimals,
+            stablecoinAdmin: stablecoinAdmin,
+            salt: salt
+        });
     }
 
     /// @notice Returns the deterministic address for a proxy deployed with the given

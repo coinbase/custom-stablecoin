@@ -24,8 +24,8 @@ contract StablecoinMintTest is StablecoinTest {
         stablecoin.mint(alice, 1);
     }
 
-    /// @notice Verifies mint reverts with a clear error when the caller has MINT_ROLE but no rate-limit config
-    /// @dev NotConfigured: a division-by-zero panic must never surface; the explicit error fires first
+    /// @notice Verifies mint reverts with RateLimitNotConfigured when the caller has MINT_ROLE but no rate-limit config
+    /// @dev RateLimitNotConfigured: the explicit error fires in currentLimit before any arithmetic
     function test_mint_revert_minterNotConfigured(address unconfiguredMinter) public {
         vm.assume(unconfiguredMinter != minter && unconfiguredMinter != address(0));
         vm.startPrank(admin);
@@ -33,7 +33,7 @@ contract StablecoinMintTest is StablecoinTest {
         vm.stopPrank();
         vm.expectRevert(
             abi.encodeWithSelector(
-                RateLimit.NotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), unconfiguredMinter
+                RateLimit.RateLimitNotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), unconfiguredMinter
             )
         );
         vm.prank(unconfiguredMinter);

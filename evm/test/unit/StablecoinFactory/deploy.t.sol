@@ -45,12 +45,19 @@ contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
         assertGt(proxyAddr.code.length, 0);
     }
 
-    /// @notice Verifies deploy emits StablecoinDeployed with the correct proxy address
-    /// @dev Event integrity: the emitted address must match the return value of deploy()
+    /// @notice Verifies deploy emits StablecoinDeployed with the correct parameters
+    /// @dev Event integrity: all emitted fields must match the deploy arguments
     function test_deploy_success_emitsStablecoinDeployed(bytes32 salt) public {
         address predicted = _computeAddress(salt);
-        vm.expectEmit(true, false, false, false);
-        emit StablecoinFactory.StablecoinDeployed({stablecoin: predicted});
+        vm.expectEmit(true, true, true, true);
+        emit StablecoinFactory.StablecoinDeployed({
+            stablecoin: predicted,
+            name: TOKEN_NAME,
+            symbol: TOKEN_SYMBOL,
+            decimals: TOKEN_DECIMALS,
+            stablecoinAdmin: stablecoinAdmin,
+            salt: salt
+        });
         _deploy(salt);
     }
 

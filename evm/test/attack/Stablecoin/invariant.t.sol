@@ -111,7 +111,7 @@ contract StablecoinHandler is Test {
         balanceAtBlocklistTime[target] = stablecoin.balanceOf(target);
         ghostBlocklisted[target] = true;
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(target, true);
+        stablecoin.blocklist(target);
     }
 
     /// @dev Unblocklists a randomly selected tracked actor.
@@ -120,7 +120,7 @@ contract StablecoinHandler is Test {
         if (!ghostBlocklisted[target]) return;
         ghostBlocklisted[target] = false;
         vm.prank(blocklister);
-        stablecoin.updateBlocklistStatus(target, false);
+        stablecoin.unblocklist(target);
     }
 
     /// @dev Submits a transferWithAuthorization signed by alice, consuming a unique nonce.
