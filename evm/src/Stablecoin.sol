@@ -282,7 +282,7 @@ contract Stablecoin is
         return TokenMetadata.decimals();
     }
 
-    /// @notice Declares ERC-165 support for ERC-20, ERC-2612 (Permit), ERC-3009, and inherited interfaces.
+    /// @notice Declares ERC-165 support for ERC-20, ERC-2612 (Permit), and inherited interfaces.
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IERC20).interfaceId || interfaceId == type(IERC20Permit).interfaceId
             || super.supportsInterface(interfaceId);
