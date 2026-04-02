@@ -132,7 +132,7 @@ contract TwoStepUpgradeableBeaconTest is StablecoinTest {
 
     /// @notice Verifies renounceOwnership always reverts, even when called by the owner
     function test_renounceOwnership_revert_disabled() public {
-        vm.expectRevert(TwoStepUpgradeableBeacon.RenouncingOwnershipDisabled.selector);
+        vm.expectRevert(TwoStepUpgradeableBeacon.RenouneOwnershipDisabled.selector);
         vm.prank(admin);
         twoStepBeacon.renounceOwnership();
     }

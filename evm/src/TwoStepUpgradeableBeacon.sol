@@ -20,7 +20,7 @@ contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @notice Thrown when the owner attempts to renounce ownership.
-    error RenouncingOwnershipDisabled();
+    error RenouneOwnershipDisabled();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
@@ -43,7 +43,7 @@ contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
 
     /// @inheritdoc Ownable
     function renounceOwnership() public override(Ownable) onlyOwner {
-        revert RenouncingOwnershipDisabled();
+        revert RenouneOwnershipDisabled();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
