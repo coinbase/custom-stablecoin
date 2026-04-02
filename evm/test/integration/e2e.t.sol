@@ -158,7 +158,7 @@ contract StablecoinE2ETest is StablecoinTest {
         // Blocklist target on scA — not blocklisted on scB
         address target = makeAddr("target");
         vm.prank(localAdmin);
-        scA.updateBlocklistStatus(target, true);
+        scA.blocklist(target);
         assertTrue(scA.isBlocklisted(target));
         assertFalse(scB.isBlocklisted(target));
     }

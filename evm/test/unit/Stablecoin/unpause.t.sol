@@ -10,14 +10,14 @@ contract StablecoinUnpauseTest is StablecoinTest {
 
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
-    /// @notice Verifies unpause reverts for any caller without PAUSE_ROLE
-    /// @dev Access control: onlyRole(PAUSE_ROLE) must reject all unauthorized callers
+    /// @notice Verifies unpause reverts for any caller without UNPAUSE_ROLE
+    /// @dev Access control: onlyRole(UNPAUSE_ROLE) must reject all unauthorized callers
     function test_unpause_revert_unauthorized(address caller) public {
         vm.assume(caller != pauser);
         _pause();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, caller, stablecoin.PAUSE_ROLE()
+                IAccessControl.AccessControlUnauthorizedAccount.selector, caller, stablecoin.UNPAUSE_ROLE()
             )
         );
         vm.prank(caller);

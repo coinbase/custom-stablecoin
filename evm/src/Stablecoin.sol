@@ -12,6 +12,8 @@ import {
     ERC20PermitUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 import {Blocklist} from "./lib/Blocklist.sol";
@@ -56,14 +58,20 @@ contract Stablecoin is
     /// @notice Role required to update mint rate-limit configurations for existing minters.
     bytes32 public constant MINT_RATE_LIMIT_ROLE = keccak256("MINT_RATE_LIMIT_ROLE");
 
-    /// @notice Role required to update blocklist status for addresses.
+    /// @notice Role required to blocklist addresses.
     bytes32 public constant BLOCKLIST_ROLE = keccak256("BLOCKLIST_ROLE");
+
+    /// @notice Role required to unblocklist addresses.
+    bytes32 public constant UNBLOCKLIST_ROLE = keccak256("UNBLOCKLIST_ROLE");
 
     /// @notice Role required to update the contract-level metadata URI (ERC-7572).
     bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
-    /// @notice Role required to pause and unpause all token transfers.
+    /// @notice Role required to pause all token transfers.
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+
+    /// @notice Role required to unpause all token transfers.
+    bytes32 public constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
 
     /// @notice Rate-limit key scoping mint capacity. Passed to {RateLimit} for all mint-related operations.
     bytes32 public constant MINT_RATE_LIMIT_KEY = keccak256("MINT_RATE_LIMIT");
@@ -128,7 +136,7 @@ contract Stablecoin is
     /// @param amount Number of tokens to transfer.
     /// @param memo   The memo associated with the transfer.
     function transferWithMemo(address to, uint256 amount, bytes32 memo) external {
-        _transfer({from: msg.sender, to: to, value: amount});
+        _transfer({from: _msgSender(), to: to, value: amount});
         emit Memo({memo: memo});
     }
 
@@ -141,7 +149,7 @@ contract Stablecoin is
     /// @param amount Number of tokens to transfer.
     /// @param memo   The memo associated with the transfer.
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external {
-        _spendAllowance({owner: from, spender: msg.sender, value: amount});
+        _spendAllowance({owner: from, spender: _msgSender(), value: amount});
         _transfer({from: from, to: to, value: amount});
         emit Memo({memo: memo});
     }
@@ -151,9 +159,9 @@ contract Stablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: _msgSender(), amount: amount});
         _mint(to, amount);
-        emit Minted({minter: msg.sender, to: to, amount: amount});
+        emit Minted({minter: _msgSender(), to: to, amount: amount});
     }
 
     /// @notice Mints `amount` tokens to `to` with a memo.
@@ -164,18 +172,18 @@ contract Stablecoin is
     /// @param amount Number of tokens to mint.
     /// @param memo   The memo associated with the mint.
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external onlyRole(MINT_ROLE) {
-        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: _msgSender(), amount: amount});
         _mint(to, amount);
         emit Memo({memo: memo});
-        emit Minted({minter: msg.sender, to: to, amount: amount});
+        emit Minted({minter: _msgSender(), to: to, amount: amount});
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
     ///
     /// @param amount Number of tokens to burn.
     function burn(uint256 amount) external onlyRole(BURN_ROLE) {
-        _burn(msg.sender, amount);
-        emit Burned({burner: msg.sender, amount: amount});
+        _burn(_msgSender(), amount);
+        emit Burned({burner: _msgSender(), amount: amount});
     }
 
     /// @notice Burns `amount` tokens from the caller's balance with a memo.
@@ -185,14 +193,15 @@ contract Stablecoin is
     /// @param amount Number of tokens to burn.
     /// @param memo   The memo associated with the burn.
     function burnWithMemo(uint256 amount, bytes32 memo) external onlyRole(BURN_ROLE) {
-        _burn(msg.sender, amount);
+        _burn(_msgSender(), amount);
         emit Memo({memo: memo});
-        emit Burned({burner: msg.sender, amount: amount});
+        emit Burned({burner: _msgSender(), amount: amount});
     }
 
     /// @notice Updates an existing minter's rate-limit configuration.
     ///
     /// @dev Cannot add or remove minters; use role management for that.
+    /// Configuring a new limit resets the remaining capacity to the full limit.
     ///
     /// @param minter   Minter address to update.
     /// @param limit    New maximum mint capacity.
@@ -219,12 +228,18 @@ contract Stablecoin is
         _configureRateLimit({key: MINT_RATE_LIMIT_KEY, account: minter, limit: limit, interval: interval});
     }
 
-    /// @notice Updates the blocklist status for `account`.
+    /// @notice Blocks `account` from the blocklist.
     ///
-    /// @param account     Address to update.
-    /// @param blocklisted Whether the account should be blocklisted.
-    function updateBlocklistStatus(address account, bool blocklisted) external onlyRole(BLOCKLIST_ROLE) {
-        _updateBlocklistStatus({account: account, blocklisted: blocklisted});
+    /// @param account Address to block.
+    function blocklist(address account) external onlyRole(BLOCKLIST_ROLE) {
+        _updateBlocklistStatus({account: account, blocklisted: true});
+    }
+
+    /// @notice Unblocks `account` from the blocklist.
+    ///
+    /// @param account Address to unblock.
+    function unblocklist(address account) external onlyRole(UNBLOCKLIST_ROLE) {
+        _updateBlocklistStatus({account: account, blocklisted: false});
     }
 
     /// @notice Updates the contract-level metadata URI (ERC-7572).
@@ -240,7 +255,7 @@ contract Stablecoin is
     }
 
     /// @notice Unpauses token transfers.
-    function unpause() external onlyRole(PAUSE_ROLE) {
+    function unpause() external onlyRole(UNPAUSE_ROLE) {
         _unpause();
     }
 
@@ -265,6 +280,12 @@ contract Stablecoin is
     /// @return The number of decimals.
     function decimals() public view override(ERC20Upgradeable, TokenMetadata) returns (uint8) {
         return TokenMetadata.decimals();
+    }
+
+    /// @notice Declares ERC-165 support for ERC-20, ERC-2612 (Permit), ERC-3009, and inherited interfaces.
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IERC20).interfaceId || interfaceId == type(IERC20Permit).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 
     /// @notice Returns the current mint capacity for `minter`.
@@ -303,9 +324,25 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlocklisted({account: msg.sender});
+        _requireNotBlocklisted({account: _msgSender()});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
-        super._update(from, to, value);
+        ERC20PausableUpgradeable._update(from, to, value);
+    }
+
+    /// @notice Overrides the ERC-20 approve hook to enforce blocklist checks.
+    ///
+    /// @param owner     The owner address.
+    /// @param spender   The spender address.
+    /// @param value     The token amount being approved.
+    /// @param emitEvent Whether to emit the {Approval} event.
+    function _approve(address owner, address spender, uint256 value, bool emitEvent)
+        internal
+        override(ERC20Upgradeable)
+    {
+        _requireNotBlocklisted({account: _msgSender()});
+        _requireNotBlocklisted({account: owner});
+        _requireNotBlocklisted({account: spender});
+        ERC20Upgradeable._approve(owner, spender, value, emitEvent);
     }
 }
