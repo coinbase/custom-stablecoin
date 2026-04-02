@@ -101,8 +101,10 @@ contract StablecoinWorkflowTest is StablecoinTest {
         vm.stopPrank();
 
         assertFalse(stablecoin.hasRole(stablecoin.MINT_ROLE(), minter2));
-        // Config cleared: currentMintLimit panics (interval=0 → div-by-zero in Math.mulDiv)
-        vm.expectRevert(abi.encodeWithSelector(bytes4(0x4e487b71), uint256(18)));
+        // Config cleared: currentMintLimit reverts with RateLimitNotConfigured
+        vm.expectRevert(
+            abi.encodeWithSelector(RateLimit.RateLimitNotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), minter2)
+        );
         stablecoin.currentMintLimit(minter2);
     }
 

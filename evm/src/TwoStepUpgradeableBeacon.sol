@@ -16,6 +16,13 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 /// @author Coinbase
 contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                      EVENTS / ERRORS                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Thrown when the owner attempts to renounce ownership.
+    error RenouncingOwnershipDisabled();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CONSTRUCTOR                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -32,6 +39,11 @@ contract TwoStepUpgradeableBeacon is UpgradeableBeacon, Ownable2Step {
     /// @inheritdoc Ownable2Step
     function transferOwnership(address newOwner) public override(Ownable, Ownable2Step) {
         Ownable2Step.transferOwnership(newOwner);
+    }
+
+    /// @inheritdoc Ownable
+    function renounceOwnership() public override(Ownable) onlyOwner {
+        revert RenouncingOwnershipDisabled();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

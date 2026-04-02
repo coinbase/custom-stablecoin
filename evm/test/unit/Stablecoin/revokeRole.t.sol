@@ -11,7 +11,7 @@ contract StablecoinRevokeRoleTest is StablecoinTest {
     // ── Happy paths ───────────────────────────────────────────────────────────────────────
 
     /// @notice Verifies revoking MINT_ROLE clears the minter's rate-limit configuration
-    /// @dev Side effect: _remove is called; currentMintLimit(minter) panics after revocation (interval=0)
+    /// @dev Side effect: _removeRateLimit is called; currentMintLimit reverts with RateLimitNotConfigured
     function test_revokeRole_success_clearsMinterConfig_whenMintRoleRevoked() public {
         vm.startPrank(admin);
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter);
@@ -19,8 +19,9 @@ contract StablecoinRevokeRoleTest is StablecoinTest {
 
         assertFalse(stablecoin.hasRole(stablecoin.MINT_ROLE(), minter));
 
-        // Config is zeroed: currentMintLimit now panics because interval=0 (div by zero)
-        vm.expectRevert(abi.encodeWithSelector(bytes4(0x4e487b71), uint256(18)));
+        vm.expectRevert(
+            abi.encodeWithSelector(RateLimit.RateLimitNotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), minter)
+        );
         stablecoin.currentMintLimit(minter);
     }
 

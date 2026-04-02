@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
+import {RateLimit} from "src/lib/RateLimit.sol";
+
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 contract StablecoinCurrentMintLimitTest is StablecoinTest {
     // ── Revert paths ──────────────────────────────────────────────────────────────────────
 
-    /// @notice Verifies currentMintLimit panics with division-by-zero for an unconfigured address
-    /// @dev Edge case: unconfigured minter has interval=0; Math.mulDiv(elapsed, 0, 0) triggers Panic(0x12)
-    function test_currentMintLimit_revert_divisionByZero_whenNotConfigured(address target) public {
+    /// @notice Verifies currentMintLimit reverts with RateLimitNotConfigured for an unconfigured address
+    function test_currentMintLimit_revert_rateLimitNotConfigured(address target) public {
         vm.assume(target != minter);
-        vm.expectRevert(abi.encodeWithSelector(bytes4(0x4e487b71), uint256(18)));
+        vm.expectRevert(
+            abi.encodeWithSelector(RateLimit.RateLimitNotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), target)
+        );
         stablecoin.currentMintLimit(target);
     }
 
-    /// @notice Verifies currentMintLimit panics after a rate limit is removed via revokeRole
-    function test_currentMintLimit_revert_divisionByZero_afterRemoval() public {
+    /// @notice Verifies currentMintLimit reverts with RateLimitNotConfigured after a rate limit is removed
+    function test_currentMintLimit_revert_rateLimitNotConfigured_afterRemoval() public {
         address minter2 = makeAddr("minter2");
         vm.startPrank(admin);
         stablecoin.grantRole(stablecoin.MINT_ROLE(), minter2);
@@ -29,7 +32,9 @@ contract StablecoinCurrentMintLimitTest is StablecoinTest {
         stablecoin.revokeRole(stablecoin.MINT_ROLE(), minter2);
         vm.stopPrank();
 
-        vm.expectRevert(abi.encodeWithSelector(bytes4(0x4e487b71), uint256(18)));
+        vm.expectRevert(
+            abi.encodeWithSelector(RateLimit.RateLimitNotConfigured.selector, stablecoin.MINT_RATE_LIMIT_KEY(), minter2)
+        );
         stablecoin.currentMintLimit(minter2);
     }
 
