@@ -330,6 +330,11 @@ contract Stablecoin is
         ERC20PausableUpgradeable._update(from, to, value);
     }
 
+    /// @notice Returns msg.sender directly rather than deferring to ContextUpgradeable.
+    function _msgSender() internal view override returns (address) {
+        return msg.sender;
+    }
+
     /// @notice Overrides the ERC-20 approve hook to enforce blocklist checks.
     ///
     /// @param owner     The owner address.
