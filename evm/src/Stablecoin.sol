@@ -331,6 +331,7 @@ contract Stablecoin is
     }
 
     /// @notice Returns msg.sender directly rather than deferring to ContextUpgradeable.
+    /// @dev This function should remain unmodified as we will not be implementing erc-2771 meta-transactions.
     function _msgSender() internal view override returns (address) {
         return msg.sender;
     }
