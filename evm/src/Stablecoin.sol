@@ -330,7 +330,7 @@ contract Stablecoin is
         ERC20PausableUpgradeable._update(from, to, value);
     }
 
-    /// @notice Returns msg.sender directly rather than deferring to ContextUpgradeable.
+    /// @notice Returns msg.sender directly rather than letting ContextUpgradeable handle it.
     /// @dev This function should remain unmodified as we will not be implementing erc-2771 meta-transactions.
     function _msgSender() internal view override returns (address) {
         return msg.sender;
