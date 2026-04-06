@@ -136,7 +136,7 @@ contract Stablecoin is
     /// @param amount Number of tokens to transfer.
     /// @param memo   The memo associated with the transfer.
     function transferWithMemo(address to, uint256 amount, bytes32 memo) external {
-        _transfer({from: _msgSender(), to: to, value: amount});
+        _transfer({from: msg.sender, to: to, value: amount});
         emit Memo({memo: memo});
     }
 
@@ -149,7 +149,7 @@ contract Stablecoin is
     /// @param amount Number of tokens to transfer.
     /// @param memo   The memo associated with the transfer.
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external {
-        _spendAllowance({owner: from, spender: _msgSender(), value: amount});
+        _spendAllowance({owner: from, spender: msg.sender, value: amount});
         _transfer({from: from, to: to, value: amount});
         emit Memo({memo: memo});
     }
@@ -159,9 +159,9 @@ contract Stablecoin is
     /// @param to     Recipient address.
     /// @param amount Number of tokens to mint.
     function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
-        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: _msgSender(), amount: amount});
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
         _mint(to, amount);
-        emit Minted({minter: _msgSender(), to: to, amount: amount});
+        emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
     /// @notice Mints `amount` tokens to `to` with a memo.
@@ -172,18 +172,18 @@ contract Stablecoin is
     /// @param amount Number of tokens to mint.
     /// @param memo   The memo associated with the mint.
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external onlyRole(MINT_ROLE) {
-        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: _msgSender(), amount: amount});
+        _consumeLimit({key: MINT_RATE_LIMIT_KEY, account: msg.sender, amount: amount});
         _mint(to, amount);
         emit Memo({memo: memo});
-        emit Minted({minter: _msgSender(), to: to, amount: amount});
+        emit Minted({minter: msg.sender, to: to, amount: amount});
     }
 
     /// @notice Burns `amount` tokens from the caller's balance.
     ///
     /// @param amount Number of tokens to burn.
     function burn(uint256 amount) external onlyRole(BURN_ROLE) {
-        _burn(_msgSender(), amount);
-        emit Burned({burner: _msgSender(), amount: amount});
+        _burn(msg.sender, amount);
+        emit Burned({burner: msg.sender, amount: amount});
     }
 
     /// @notice Burns `amount` tokens from the caller's balance with a memo.
@@ -193,9 +193,9 @@ contract Stablecoin is
     /// @param amount Number of tokens to burn.
     /// @param memo   The memo associated with the burn.
     function burnWithMemo(uint256 amount, bytes32 memo) external onlyRole(BURN_ROLE) {
-        _burn(_msgSender(), amount);
+        _burn(msg.sender, amount);
         emit Memo({memo: memo});
-        emit Burned({burner: _msgSender(), amount: amount});
+        emit Burned({burner: msg.sender, amount: amount});
     }
 
     /// @notice Updates an existing minter's rate-limit configuration.
@@ -324,7 +324,7 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable, ERC20PausableUpgradeable)
     {
-        _requireNotBlocklisted({account: _msgSender()});
+        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: from});
         _requireNotBlocklisted({account: to});
         ERC20PausableUpgradeable._update(from, to, value);
@@ -346,7 +346,7 @@ contract Stablecoin is
         internal
         override(ERC20Upgradeable)
     {
-        _requireNotBlocklisted({account: _msgSender()});
+        _requireNotBlocklisted({account: msg.sender});
         _requireNotBlocklisted({account: owner});
         _requireNotBlocklisted({account: spender});
         ERC20Upgradeable._approve(owner, spender, value, emitEvent);
