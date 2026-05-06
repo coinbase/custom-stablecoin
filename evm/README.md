@@ -39,33 +39,6 @@ forge test -vvv
 forge fmt --check
 ```
 
-## Deploy
-
-Copy `.env.example` to `.env`, fill in the values, then run the deployment script. `RPC_URL` should point to an RPC endpoint for the target network (e.g., from [Alchemy](https://www.alchemy.com/) or [Infura](https://www.infura.io/)):
-
-```sh
-cp .env.example .env
-# edit .env with your values
-
-export $(cat .env | xargs)
-export RPC_URL=<https://your-rpc-endpoint>
-
-forge script script/Deploy.s.sol:Deploy \
-  --rpc-url $RPC_URL \
-  --broadcast \
-  --verify
-```
-
-The script deploys: `Stablecoin` implementation → `TwoStepUpgradeableBeacon` → `StablecoinFactory` implementation → `ERC1967Proxy` wrapping the factory → one initial `Stablecoin` proxy via the factory.
-
-Optional token parameters can be overridden via environment variables:
-
-| Variable | Default |
-|---|---|
-| `TOKEN_NAME` | `USD Stablecoin` |
-| `TOKEN_SYMBOL` | `USDS` |
-| `TOKEN_DECIMALS` | `6` |
-
 ## Project Structure
 
 ```
@@ -81,16 +54,13 @@ evm/
 │       ├── RateLimit.sol               # Rolling rate-limit mixin
 │       ├── TokenMetadata.sol           # Custom decimals + ERC-7572 contractURI mixin
 │       └── ERC3009Upgradeable.sol      # ERC-3009 transfer-with-authorization mixin
-├── script/
-│   └── Deploy.s.sol                    # Full system deployment script
 ├── test/
 │   ├── unit/                           # Per-function unit tests
 │   ├── integration/                    # End-to-end workflow tests
 │   ├── attack/                         # Adversarial scenario tests
 │   ├── benchmark/                      # Gas benchmark tests
 │   └── lib/                            # Test base contracts and mocks
-├── foundry.toml                        # Foundry configuration
-└── .env.example                        # Required environment variables
+└── foundry.toml                        # Foundry configuration
 ```
 
 ## Dependencies
