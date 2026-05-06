@@ -22,7 +22,7 @@ and gates `mint_to` calls behind:
 | --- | --- | --- |
 | `admin` (DEFAULT_ADMIN) | Cold (SCM) | Rotate any role, revoke `MINT_ROLE` (close minter PDA). |
 | `MINT_ROLE` | Hot (CCS) | `mint_tokens` up to the configured rate limit. Granted *implicitly* by `configure_minter` creating the per-(mint, minter) config PDA. |
-| `rate_limit_admin` | Cold (SCM) | `configure_minter` (set / reset limit + interval; also doubles as the role grant). |
+| `rate_limit_admin` | Cold (SCM) | `configure_minter` (set or update limit + interval; also doubles as the role grant). |
 | `allowlist_admin` | Cold (SCM) | `add_to_allowlist` / `remove_from_allowlist` for any (mint, minter). |
 
 ## Instructions
@@ -33,7 +33,7 @@ and gates `mint_to` calls behind:
 | `update_admin` | `admin` | Rotate the admin key. |
 | `update_rate_limit_admin` | `admin` | Rotate the rate-limit admin key. |
 | `update_allowlist_admin` | `admin` | Rotate the allowlist admin key. |
-| `configure_minter` | `rate_limit_admin` | Create or reset a `(mint, minter)` rate-limit config (also grants `MINT_ROLE`). |
+| `configure_minter` | `rate_limit_admin` | Create or update a `(mint, minter)` rate-limit config (preserves remaining capacity on reconfigure; also grants `MINT_ROLE`). |
 | `revoke_minter` | `admin` | Close a `(mint, minter)` config (revokes `MINT_ROLE`, returns rent). |
 | `add_to_allowlist` | `allowlist_admin` | Lazily create the `(mint, minter)` allowlist on first call, push `address`. |
 | `remove_from_allowlist` | `allowlist_admin` | Remove `address` from the allowlist. |
