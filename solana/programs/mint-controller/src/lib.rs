@@ -19,11 +19,6 @@ pub mod mint_controller {
     use super::*;
 
     /// Initialize the per-mint role-holder PDA and mint-authority PDA for `mint`.
-    ///
-    /// Pre-conditions: the caller has already transferred SPL `mint_authority`
-    /// of `mint` to `mint_authority_pda` via `spl-token authorize`. This
-    /// instruction asserts that condition; it cannot perform the transfer
-    /// itself because the *current* mint authority must sign the SPL call.
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
@@ -89,11 +84,6 @@ pub mod mint_controller {
     }
 
     /// Configure (or re-configure) `minter`'s rate limit for `mint`.
-    ///
-    /// First call creates the `MintRateLimitConfig` PDA, which simultaneously
-    /// grants `MINT_ROLE` to `minter`. Subsequent calls reset both the limit /
-    /// interval and the `remaining` counter back to the new `limit` (matches
-    /// EVM `RateLimit._configureRateLimit`).
     pub fn configure_minter(
         ctx: Context<ConfigureMinter>,
         minter: Pubkey,
@@ -105,18 +95,22 @@ pub mod mint_controller {
             MintControllerError::InvalidConfig
         );
 
-        let now = Clock::get()?.unix_timestamp;
         let bump = ctx.bumps.config;
         let config = &mut ctx.accounts.config;
-        config.minter_public_key = minter;
+
+        // Fresh init (Anchor zero-inits accounts; bump is always non-zero for
+        // an established PDA). Reconfigure leaves `remaining` and
+        // `last_consumed` intact so an in-flight rate-limit window survives.
+        if config.bump == 0 {
+            let now = Clock::get()?.unix_timestamp;
+            config.minter_public_key = minter;
+            config.remaining = limit;
+            config.last_consumed = now;
+            config.bump = bump;
+        }
+
         config.limit = limit;
         config.interval = interval;
-        // Resetting on every call (including reconfigure) is intentional: it
-        // matches the EVM behaviour, and means a misconfigured minter can't
-        // race in a mint between an `update` and the operator noticing.
-        config.remaining = limit;
-        config.last_consumed = now;
-        config.bump = bump;
 
         msg!(
             "configure_minter mint={} minter={} limit={} interval={}s",
@@ -129,10 +123,6 @@ pub mod mint_controller {
     }
 
     /// Revoke `MINT_ROLE` from `minter` for `mint` by closing the config PDA.
-    ///
-    /// Rent is returned to `admin`. After this returns, any in-flight `mint`
-    /// instruction for the same (mint, minter) will fail at account
-    /// deserialization (`AccountNotInitialized`).
     pub fn revoke_minter(ctx: Context<RevokeMinter>, minter: Pubkey) -> Result<()> {
         msg!(
             "revoke_minter mint={} minter={}",
@@ -143,11 +133,6 @@ pub mod mint_controller {
     }
 
     /// Add `address` to `minter`'s recipient allowlist for `mint`.
-    ///
-    /// Lazily creates the `MintAllowlistConfig` PDA on first call (the
-    /// `init_if_needed` constraint on `allowlist`). Subsequent calls reuse the
-    /// existing PDA. Rejects if `address` is already present, or if the
-    /// allowlist is at `MAX_ALLOWLIST_LEN` capacity.
     pub fn add_to_allowlist(
         ctx: Context<AddToAllowlist>,
         minter: Pubkey,
@@ -186,10 +171,6 @@ pub mod mint_controller {
     }
 
     /// Remove `address` from `minter`'s recipient allowlist for `mint`.
-    ///
-    /// Errors with `AccountNotInitialized` if no allowlist has been created
-    /// yet for this (mint, minter) — there's no "remove from empty" path
-    /// because that would require silently creating the PDA.
     pub fn remove_from_allowlist(
         ctx: Context<RemoveFromAllowlist>,
         minter: Pubkey,
@@ -217,13 +198,6 @@ pub mod mint_controller {
     }
 
     /// Rate-limited mint to a whitelisted recipient.
-    ///
-    /// Pre-flight checks (in order):
-    ///   1. `minter` signer matches the on-chain `config.minter_public_key`.
-    ///   2. `recipient` is in `allowlist.addresses`.
-    ///   3. `amount` does not exceed the minter's currently-available capacity.
-    /// On success: updates rate-limit accounting and CPIs `mint_to` signed by
-    /// the per-mint `mint_authority` PDA.
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
         require!(amount > 0, MintControllerError::InvalidAmount);
         require!(

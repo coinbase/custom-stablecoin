@@ -280,18 +280,20 @@ describe("mint-controller", () => {
       expect(cfg.remaining.toString()).to.equal("1000000");
     });
 
-    it("second call resets remaining to the new limit", async () => {
+    it("second call updates limit and interval but preserves remaining and last_consumed", async () => {
       const { mint, rateLimitAdmin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
 
       await configureMinter(mint, rateLimitAdmin, minter, 1_000_000, 86_400);
-      // Second call (re-config) — should reset remaining to new limit.
-      await configureMinter(mint, rateLimitAdmin, minter, 500_000, 3600);
+      const before = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
 
-      const cfg = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
-      expect(cfg.limit.toString()).to.equal("500000");
-      expect(cfg.interval.toString()).to.equal("3600");
-      expect(cfg.remaining.toString()).to.equal("500000");
+      await configureMinter(mint, rateLimitAdmin, minter, 500_000, 3600);
+      const after = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
+
+      expect(after.limit.toString()).to.equal("500000");
+      expect(after.interval.toString()).to.equal("3600");
+      expect(after.remaining.toString()).to.equal(before.remaining.toString());
+      expect(after.lastConsumed.toString()).to.equal(before.lastConsumed.toString());
     });
 
     it("rejects from non-rate_limit_admin", async () => {

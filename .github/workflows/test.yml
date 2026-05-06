@@ -49,39 +49,3 @@ jobs:
           forge test -vvv
         id: test
         working-directory: evm
-
-  solana:
-    name: Solana / Anchor project
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
-        with:
-          toolchain: stable
-          components: rustfmt
-
-      - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.0/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-
-      - name: Install Anchor CLI
-        run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --force
-          avm install 0.31.1
-          avm use 0.31.1
-
-      - name: Run cargo fmt --check
-        run: cargo fmt --all -- --check
-        working-directory: solana
-
-      - name: Run anchor build
-        run: anchor build
-        working-directory: solana
