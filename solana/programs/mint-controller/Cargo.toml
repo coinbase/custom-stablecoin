@@ -1,0 +1,21 @@
+[package]
+name = "mint-controller"
+version = "0.1.0"
+description = "On-chain mint rate limiting and recipient allowlisting for Solana SPL stablecoins"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mint_controller"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = "0.31.1"
