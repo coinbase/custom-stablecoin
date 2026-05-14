@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity 0.8.30;
+
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+
+import {RateLimit} from "src/lib/RateLimit.sol";
+import {Stablecoin} from "src/Stablecoin.sol";
+
+import {StablecoinTest} from "test/lib/StablecoinTest.sol";
+
+contract StablecoinGrantMinterRoleWithLimitTest is StablecoinTest {
+    // ── Reverts ───────────────────────────────────────────────────────────────────────────
+
+    /// @notice Verifies grantMinterRoleWithLimit reverts for any caller without DEFAULT_ADMIN_ROLE
+    /// @dev Access control: onlyRole(DEFAULT_ADMIN_ROLE) must reject all unauthorized callers
+    function test_grantMinterRoleWithLimit_revert_unauthorized(address caller) public {
+        vm.assume(caller != admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, caller, stablecoin.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(caller);
+        stablecoin.grantMinterRoleWithLimit(makeAddr("newMinter"), 1, 1);
+    }
+
+    /// @notice Verifies grantMinterRoleWithLimit reverts when limit is zero
+    /// @dev InvalidConfig: limit must be non-zero for a valid rate-limit configuration
+    function test_grantMinterRoleWithLimit_revert_zeroLimit(address target, uint40 interval) public {
+        vm.assume(target != address(0));
+        vm.assume(interval != 0);
+        vm.expectRevert(RateLimit.InvalidConfig.selector);
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(target, 0, interval);
+    }
+
+    /// @notice Verifies grantMinterRoleWithLimit reverts when interval is zero
+    /// @dev InvalidConfig: interval must be non-zero for a valid rate-limit configuration
+    function test_grantMinterRoleWithLimit_revert_zeroInterval(address target, uint216 limit) public {
+        vm.assume(target != address(0));
+        vm.assume(limit != 0);
+        vm.expectRevert(RateLimit.InvalidConfig.selector);
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(target, limit, 0);
+    }
+
+    // ── Happy paths ───────────────────────────────────────────────────────────────────────
+
+    /// @notice Verifies grantMinterRoleWithLimit grants MINT_ROLE to the target address
+    /// @dev Role grant: hasRole(MINT_ROLE, minter) must be true after the call
+    function test_grantMinterRoleWithLimit_success_grantsRole(address target, uint216 limit, uint40 interval) public {
+        vm.assume(target != address(0));
+        vm.assume(limit != 0);
+        vm.assume(interval != 0);
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(target, limit, interval);
+        assertTrue(stablecoin.hasRole(stablecoin.MINT_ROLE(), target));
+    }
+
+    /// @notice Verifies grantMinterRoleWithLimit sets the rate-limit so currentMintLimit equals limit
+    /// @dev Config: currentMintLimit(minter) must equal the configured limit immediately after the call
+    function test_grantMinterRoleWithLimit_success_configuresMintLimit(address target, uint216 limit, uint40 interval)
+        public
+    {
+        vm.assume(target != address(0));
+        vm.assume(limit != 0);
+        vm.assume(interval != 0);
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(target, limit, interval);
+        assertEq(stablecoin.currentMintLimit(target), limit);
+    }
+
+    /// @notice Verifies the minter can mint immediately after grantMinterRoleWithLimit without a separate configure step
+    /// @dev Atomicity: the minter must not revert with MinterNotConfigured on the first mint call
+    function test_grantMinterRoleWithLimit_success_canMintImmediately(uint216 limit, uint40 interval) public {
+        vm.assume(limit != 0);
+        vm.assume(interval != 0);
+        address newMinter = makeAddr("newMinter");
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(newMinter, limit, interval);
+        vm.prank(newMinter);
+        stablecoin.mint(alice, 1);
+        assertEq(stablecoin.balanceOf(alice), INITIAL_MINT + 1);
+    }
+
+    /// @notice Verifies grantMinterRoleWithLimit emits both RoleGranted and RateLimitConfigured
+    /// @dev Event integrity: both events must fire with the correct arguments in a single call
+    function test_grantMinterRoleWithLimit_success_emitsEvents(address target, uint216 limit, uint40 interval) public {
+        vm.assume(target != address(0));
+        vm.assume(!stablecoin.hasRole(stablecoin.MINT_ROLE(), target));
+        vm.assume(limit != 0);
+        vm.assume(interval != 0);
+        vm.expectEmit(true, true, true, true);
+        emit IAccessControl.RoleGranted(stablecoin.MINT_ROLE(), target, admin);
+        vm.expectEmit(true, true, false, true);
+        emit RateLimit.RateLimitConfigured({
+            key: stablecoin.MINT_RATE_LIMIT_KEY(), account: target, limit: limit, interval: interval
+        });
+        vm.prank(admin);
+        stablecoin.grantMinterRoleWithLimit(target, limit, interval);
+    }
+
+    /// @notice Verifies grantMinterRoleWithLimit is idempotent for the role grant when called twice
+    /// @dev Role idempotency: granting an already-held role updates the config without error
+    function test_grantMinterRoleWithLimit_success_idempotentRoleGrant(
+        uint216 limit1,
+        uint40 interval1,
+        uint216 limit2,
+        uint40 interval2
+    ) public {
+        vm.assume(limit1 != 0);
+        vm.assume(limit2 != 0);
+        vm.assume(interval1 != 0);
+        vm.assume(interval2 != 0);
+        address newMinter = makeAddr("newMinter");
+        vm.startPrank(admin);
+        stablecoin.grantMinterRoleWithLimit(newMinter, limit1, interval1);
+        stablecoin.grantMinterRoleWithLimit(newMinter, limit2, interval2);
+        vm.stopPrank();
+        assertTrue(stablecoin.hasRole(stablecoin.MINT_ROLE(), newMinter));
+        assertEq(stablecoin.currentMintLimit(newMinter), limit2);
+    }
+}
