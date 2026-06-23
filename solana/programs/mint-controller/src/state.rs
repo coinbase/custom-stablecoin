@@ -18,12 +18,11 @@ use anchor_lang::prelude::*;
 #[account]
 #[derive(InitSpace)]
 pub struct MintRoles {
-    /// Cold key (SCM) that can rotate any of the role authorities below.
+    /// Cold key (SCM) that can rotate role authorities, manage recipient
+    /// allowlists, and revoke minters.
     pub admin: Pubkey,
     /// Cold key (SCM) that can configure / reconfigure rate limits for minters.
-    pub rate_limit_admin: Pubkey,
-    /// Cold key (SCM) that can add / remove allowlist entries for minters.
-    pub allowlist_admin: Pubkey,
+    pub rate_limit_authority: Pubkey,
     pub bump: u8,
 }
 
@@ -57,7 +56,7 @@ pub struct MintRateLimitConfig {
 }
 
 /// Per-(mint, minter) allowlist PDA. Lazily created on the first
-/// `add_to_allowlist` call (see the instruction's `init_if_needed` constraint).
+/// `add_allowed_mint_recipient` call (see the instruction's `init_if_needed` constraint).
 ///
 /// Held intentionally separate from `MintRateLimitConfig` so the account size
 /// can grow independently if `MAX_ALLOWLIST_LEN` is raised later.

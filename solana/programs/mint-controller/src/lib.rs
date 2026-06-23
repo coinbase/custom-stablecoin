@@ -22,8 +22,7 @@ pub mod mint_controller {
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
-        rate_limit_admin: Pubkey,
-        allowlist_admin: Pubkey,
+        rate_limit_authority: Pubkey,
     ) -> Result<()> {
         // Done in the handler rather than as an account constraint to keep the
         // forward reference (mint -> mint_authority) out of the account struct.
@@ -34,16 +33,14 @@ pub mod mint_controller {
 
         let roles = &mut ctx.accounts.roles;
         roles.admin = admin;
-        roles.rate_limit_admin = rate_limit_admin;
-        roles.allowlist_admin = allowlist_admin;
+        roles.rate_limit_authority = rate_limit_authority;
         roles.bump = ctx.bumps.roles;
 
         msg!(
-            "Initialized mint_controller for mint {}: admin={}, rate_limit_admin={}, allowlist_admin={}",
+            "Initialized mint_controller for mint {}: admin={}, rate_limit_authority={}",
             ctx.accounts.mint.key(),
             admin,
-            rate_limit_admin,
-            allowlist_admin,
+            rate_limit_authority,
         );
         Ok(())
     }
@@ -55,30 +52,16 @@ pub mod mint_controller {
         Ok(())
     }
 
-    pub fn update_rate_limit_admin(
-        ctx: Context<UpdateRateLimitAdmin>,
-        new_rate_limit_admin: Pubkey,
+    pub fn update_rate_limit_authority(
+        ctx: Context<UpdateRateLimitAuthority>,
+        new_rate_limit_authority: Pubkey,
     ) -> Result<()> {
         let mint_key = ctx.accounts.mint.key();
-        ctx.accounts.roles.rate_limit_admin = new_rate_limit_admin;
+        ctx.accounts.roles.rate_limit_authority = new_rate_limit_authority;
         msg!(
-            "update_rate_limit_admin mint={} new_rate_limit_admin={}",
+            "update_rate_limit_authority mint={} new_rate_limit_authority={}",
             mint_key,
-            new_rate_limit_admin
-        );
-        Ok(())
-    }
-
-    pub fn update_allowlist_admin(
-        ctx: Context<UpdateAllowlistAdmin>,
-        new_allowlist_admin: Pubkey,
-    ) -> Result<()> {
-        let mint_key = ctx.accounts.mint.key();
-        ctx.accounts.roles.allowlist_admin = new_allowlist_admin;
-        msg!(
-            "update_allowlist_admin mint={} new_allowlist_admin={}",
-            mint_key,
-            new_allowlist_admin
+            new_rate_limit_authority
         );
         Ok(())
     }
@@ -132,11 +115,11 @@ pub mod mint_controller {
         Ok(())
     }
 
-    /// Add `address` to `minter`'s recipient allowlist for `mint`.
-    pub fn add_to_allowlist(
-        ctx: Context<AddToAllowlist>,
+    /// Add `recipient` to `minter`'s recipient allowlist for `mint`.
+    pub fn add_allowed_mint_recipient(
+        ctx: Context<AddAllowedMintRecipient>,
         minter: Pubkey,
-        address: Pubkey,
+        recipient: Pubkey,
     ) -> Result<()> {
         let bump = ctx.bumps.allowlist;
         let allowlist = &mut ctx.accounts.allowlist;
@@ -150,7 +133,7 @@ pub mod mint_controller {
         }
 
         require!(
-            !allowlist.addresses.contains(&address),
+            !allowlist.addresses.contains(&recipient),
             MintControllerError::AddressAlreadyAllowlisted
         );
         require!(
@@ -158,29 +141,29 @@ pub mod mint_controller {
             MintControllerError::MaxAllowlistLenReached
         );
 
-        allowlist.addresses.push(address);
+        allowlist.addresses.push(recipient);
 
         msg!(
-            "add_to_allowlist mint={} minter={} address={} (now {} entries)",
+            "add_allowed_mint_recipient mint={} minter={} recipient={} (now {} entries)",
             ctx.accounts.mint.key(),
             minter,
-            address,
+            recipient,
             allowlist.addresses.len(),
         );
         Ok(())
     }
 
-    /// Remove `address` from `minter`'s recipient allowlist for `mint`.
-    pub fn remove_from_allowlist(
-        ctx: Context<RemoveFromAllowlist>,
+    /// Remove `recipient` from `minter`'s recipient allowlist for `mint`.
+    pub fn remove_allowed_mint_recipient(
+        ctx: Context<RemoveAllowedMintRecipient>,
         minter: Pubkey,
-        address: Pubkey,
+        recipient: Pubkey,
     ) -> Result<()> {
         let allowlist = &mut ctx.accounts.allowlist;
         let position = allowlist
             .addresses
             .iter()
-            .position(|a| a == &address)
+            .position(|a| a == &recipient)
             .ok_or(MintControllerError::AddressNotAllowlisted)?;
 
         // swap_remove is O(1); ordering of the allowlist is not part of the
@@ -188,10 +171,10 @@ pub mod mint_controller {
         allowlist.addresses.swap_remove(position);
 
         msg!(
-            "remove_from_allowlist mint={} minter={} address={} (now {} entries)",
+            "remove_allowed_mint_recipient mint={} minter={} recipient={} (now {} entries)",
             ctx.accounts.mint.key(),
             minter,
-            address,
+            recipient,
             allowlist.addresses.len(),
         );
         Ok(())
@@ -203,7 +186,7 @@ pub mod mint_controller {
         require!(
             ctx.accounts
                 .allowlist
-                .is_allowlisted(&ctx.accounts.recipient.key()),
+                .is_allowlisted(&ctx.accounts.recipient_token_account.owner),
             MintControllerError::RecipientNotAllowlisted
         );
 
@@ -231,7 +214,7 @@ pub mod mint_controller {
             "mint mint={} minter={} recipient={} amount={} remaining={}",
             mint_key,
             ctx.accounts.minter.key(),
-            ctx.accounts.recipient.key(),
+            ctx.accounts.recipient_token_account.owner,
             amount,
             ctx.accounts.config.remaining,
         );
@@ -284,22 +267,7 @@ pub struct UpdateAdmin<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateRateLimitAdmin<'info> {
-    pub mint: Account<'info, Mint>,
-
-    #[account(
-        mut,
-        seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
-        bump = roles.bump,
-        has_one = admin @ MintControllerError::Unauthorized,
-    )]
-    pub roles: Account<'info, MintRoles>,
-
-    pub admin: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateAllowlistAdmin<'info> {
+pub struct UpdateRateLimitAuthority<'info> {
     pub mint: Account<'info, Mint>,
 
     #[account(
@@ -321,13 +289,13 @@ pub struct ConfigureMinter<'info> {
     #[account(
         seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
         bump = roles.bump,
-        has_one = rate_limit_admin @ MintControllerError::Unauthorized,
+        has_one = rate_limit_authority @ MintControllerError::Unauthorized,
     )]
     pub roles: Account<'info, MintRoles>,
 
     #[account(
         init_if_needed,
-        payer = rate_limit_admin,
+        payer = rate_limit_authority,
         space = 8 + MintRateLimitConfig::INIT_SPACE,
         seeds = [MINT_RATE_LIMIT_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
         bump,
@@ -335,7 +303,7 @@ pub struct ConfigureMinter<'info> {
     pub config: Account<'info, MintRateLimitConfig>,
 
     #[account(mut)]
-    pub rate_limit_admin: Signer<'info>,
+    pub rate_limit_authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -371,19 +339,19 @@ pub struct RevokeMinter<'info> {
 
 #[derive(Accounts)]
 #[instruction(minter: Pubkey)]
-pub struct AddToAllowlist<'info> {
+pub struct AddAllowedMintRecipient<'info> {
     pub mint: Account<'info, Mint>,
 
     #[account(
         seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
         bump = roles.bump,
-        has_one = allowlist_admin @ MintControllerError::Unauthorized,
+        has_one = admin @ MintControllerError::Unauthorized,
     )]
     pub roles: Account<'info, MintRoles>,
 
     #[account(
         init_if_needed,
-        payer = allowlist_admin,
+        payer = admin,
         space = 8 + MintAllowlistConfig::INIT_SPACE,
         seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
         bump,
@@ -391,20 +359,20 @@ pub struct AddToAllowlist<'info> {
     pub allowlist: Account<'info, MintAllowlistConfig>,
 
     #[account(mut)]
-    pub allowlist_admin: Signer<'info>,
+    pub admin: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 #[instruction(minter: Pubkey)]
-pub struct RemoveFromAllowlist<'info> {
+pub struct RemoveAllowedMintRecipient<'info> {
     pub mint: Account<'info, Mint>,
 
     #[account(
         seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
         bump = roles.bump,
-        has_one = allowlist_admin @ MintControllerError::Unauthorized,
+        has_one = admin @ MintControllerError::Unauthorized,
     )]
     pub roles: Account<'info, MintRoles>,
 
@@ -415,7 +383,7 @@ pub struct RemoveFromAllowlist<'info> {
     )]
     pub allowlist: Account<'info, MintAllowlistConfig>,
 
-    pub allowlist_admin: Signer<'info>,
+    pub admin: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -452,19 +420,9 @@ pub struct MintTokens<'info> {
     #[account(seeds = [MINT_AUTHORITY_SEED, mint.key().as_ref()], bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
-    /// The recipient's token account. `token::authority = recipient` prevents
-    /// passing a whitelisted recipient but routing tokens to a different owner.
-    #[account(mut, token::mint = mint, token::authority = recipient)]
+    /// Destination token account. The allowlist is checked against its owner.
+    #[account(mut, token::mint = mint)]
     pub recipient_token_account: Account<'info, TokenAccount>,
-
-    /// CHECK: not a signer — anyone can trigger a mint on behalf of a
-    /// whitelisted recipient. Validated against the allowlist in the handler.
-    pub recipient: UncheckedAccount<'info>,
-
-    /// Transaction fee payer. Distinct from `minter` so that a hot mint key
-    /// can hold zero SOL — typical operational pattern where a relayer pays gas.
-    #[account(mut)]
-    pub payer: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
 }

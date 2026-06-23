@@ -88,8 +88,7 @@ describe("mint-controller", () => {
   }): Promise<{
     mint: PublicKey;
     admin: Keypair;
-    rateLimitAdmin: Keypair;
-    allowlistAdmin: Keypair;
+    rateLimitAuthority: Keypair;
   }> {
     const mint = await createMint(
       provider.connection,
@@ -110,23 +109,22 @@ describe("mint-controller", () => {
     );
 
     const admin = await fundedKeypair();
-    const rateLimitAdmin = await fundedKeypair();
-    const allowlistAdmin = await fundedKeypair();
+    const rateLimitAuthority = await fundedKeypair();
 
     await program.methods
-      .initialize(admin.publicKey, rateLimitAdmin.publicKey, allowlistAdmin.publicKey)
+      .initialize(admin.publicKey, rateLimitAuthority.publicKey)
       .accounts({
         mint,
         payer: payer.publicKey,
       } as any)
       .rpc();
 
-    return { mint, admin, rateLimitAdmin, allowlistAdmin };
+    return { mint, admin, rateLimitAuthority };
   }
 
   async function configureMinter(
     mint: PublicKey,
-    rateLimitAdmin: Keypair,
+    rateLimitAuthority: Keypair,
     minter: PublicKey,
     limit: number | BN,
     intervalSecs: number | BN,
@@ -135,25 +133,25 @@ describe("mint-controller", () => {
       .configureMinter(minter, new BN(limit), new BN(intervalSecs))
       .accounts({
         mint,
-        rateLimitAdmin: rateLimitAdmin.publicKey,
+        rateLimitAuthority: rateLimitAuthority.publicKey,
       } as any)
-      .signers([rateLimitAdmin])
+      .signers([rateLimitAuthority])
       .rpc();
   }
 
-  async function addToAllowlist(
+  async function addAllowedMintRecipient(
     mint: PublicKey,
-    allowlistAdmin: Keypair,
+    admin: Keypair,
     minter: PublicKey,
-    address: PublicKey,
+    recipient: PublicKey,
   ): Promise<void> {
     await program.methods
-      .addToAllowlist(minter, address)
+      .addAllowedMintRecipient(minter, recipient)
       .accounts({
         mint,
-        allowlistAdmin: allowlistAdmin.publicKey,
+        admin: admin.publicKey,
       } as any)
-      .signers([allowlistAdmin])
+      .signers([admin])
       .rpc();
   }
 
@@ -161,13 +159,14 @@ describe("mint-controller", () => {
 
   describe("initialize", () => {
     it("creates the per-mint roles PDA when SPL mint authority is the program PDA", async () => {
-      const { mint, admin, rateLimitAdmin, allowlistAdmin } =
+      const { mint, admin, rateLimitAuthority } =
         await setupMintAndInitialize();
 
       const roles = await program.account.mintRoles.fetch(rolesPda(mint));
       expect(roles.admin.toBase58()).to.equal(admin.publicKey.toBase58());
-      expect(roles.rateLimitAdmin.toBase58()).to.equal(rateLimitAdmin.publicKey.toBase58());
-      expect(roles.allowlistAdmin.toBase58()).to.equal(allowlistAdmin.publicKey.toBase58());
+      expect(roles.rateLimitAuthority.toBase58()).to.equal(
+        rateLimitAuthority.publicKey.toBase58(),
+      );
     });
 
     it("rejects when SPL mint authority is not the program PDA", async () => {
@@ -182,7 +181,7 @@ describe("mint-controller", () => {
       const admin = Keypair.generate();
       try {
         await program.methods
-          .initialize(admin.publicKey, admin.publicKey, admin.publicKey)
+          .initialize(admin.publicKey, admin.publicKey)
           .accounts({ mint, payer: payer.publicKey } as any)
           .rpc();
         assert.fail("expected InvalidMintAuthority");
@@ -194,7 +193,7 @@ describe("mint-controller", () => {
 
   describe("update_<role> instructions", () => {
     it("rejects each updater when the wrong signer calls it", async () => {
-      const { mint, admin, rateLimitAdmin, allowlistAdmin } =
+      const { mint, admin, rateLimitAuthority } =
         await setupMintAndInitialize();
       const stranger = await fundedKeypair();
       const newKey = Keypair.generate().publicKey;
@@ -212,26 +211,14 @@ describe("mint-controller", () => {
         expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
       }
 
-      // update_rate_limit_admin called by rate_limit_admin (not admin) should fail.
+      // update_rate_limit_authority called by rate_limit_authority (not admin) should fail.
       try {
         await program.methods
-          .updateRateLimitAdmin(newKey)
-          .accounts({ mint, admin: rateLimitAdmin.publicKey } as any)
-          .signers([rateLimitAdmin])
+          .updateRateLimitAuthority(newKey)
+          .accounts({ mint, admin: rateLimitAuthority.publicKey } as any)
+          .signers([rateLimitAuthority])
           .rpc();
-        assert.fail("update_rate_limit_admin should require admin signer");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
-
-      // update_allowlist_admin called by allowlist_admin (not admin) should fail.
-      try {
-        await program.methods
-          .updateAllowlistAdmin(newKey)
-          .accounts({ mint, admin: allowlistAdmin.publicKey } as any)
-          .signers([allowlistAdmin])
-          .rpc();
-        assert.fail("update_allowlist_admin should require admin signer");
+        assert.fail("update_rate_limit_authority should require admin signer");
       } catch (err: any) {
         expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
       }
@@ -239,17 +226,11 @@ describe("mint-controller", () => {
 
     it("admin can rotate each role", async () => {
       const { mint, admin } = await setupMintAndInitialize();
-      const newRateLimitAdmin = Keypair.generate().publicKey;
-      const newAllowlistAdmin = Keypair.generate().publicKey;
+      const newRateLimitAuthority = Keypair.generate().publicKey;
       const newAdmin = Keypair.generate().publicKey;
 
       await program.methods
-        .updateRateLimitAdmin(newRateLimitAdmin)
-        .accounts({ mint, admin: admin.publicKey } as any)
-        .signers([admin])
-        .rpc();
-      await program.methods
-        .updateAllowlistAdmin(newAllowlistAdmin)
+        .updateRateLimitAuthority(newRateLimitAuthority)
         .accounts({ mint, admin: admin.publicKey } as any)
         .signers([admin])
         .rpc();
@@ -261,17 +242,18 @@ describe("mint-controller", () => {
 
       const roles = await program.account.mintRoles.fetch(rolesPda(mint));
       expect(roles.admin.toBase58()).to.equal(newAdmin.toBase58());
-      expect(roles.rateLimitAdmin.toBase58()).to.equal(newRateLimitAdmin.toBase58());
-      expect(roles.allowlistAdmin.toBase58()).to.equal(newAllowlistAdmin.toBase58());
+      expect(roles.rateLimitAuthority.toBase58()).to.equal(
+        newRateLimitAuthority.toBase58(),
+      );
     });
   });
 
   describe("configure_minter", () => {
     it("first call creates the per-(mint,minter) PDA and grants MINT_ROLE", async () => {
-      const { mint, rateLimitAdmin } = await setupMintAndInitialize();
+      const { mint, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
 
-      await configureMinter(mint, rateLimitAdmin, minter, 1_000_000, 86_400);
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000_000, 86_400);
 
       const cfg = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
       expect(cfg.minterPublicKey.toBase58()).to.equal(minter.toBase58());
@@ -281,13 +263,13 @@ describe("mint-controller", () => {
     });
 
     it("second call updates limit and interval but preserves remaining and last_consumed", async () => {
-      const { mint, rateLimitAdmin } = await setupMintAndInitialize();
+      const { mint, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
 
-      await configureMinter(mint, rateLimitAdmin, minter, 1_000_000, 86_400);
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000_000, 86_400);
       const before = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
 
-      await configureMinter(mint, rateLimitAdmin, minter, 500_000, 3600);
+      await configureMinter(mint, rateLimitAuthority, minter, 500_000, 3600);
       const after = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
 
       expect(after.limit.toString()).to.equal("500000");
@@ -296,7 +278,7 @@ describe("mint-controller", () => {
       expect(after.lastConsumed.toString()).to.equal(before.lastConsumed.toString());
     });
 
-    it("rejects from non-rate_limit_admin", async () => {
+    it("rejects from non-rate_limit_authority", async () => {
       const { mint } = await setupMintAndInitialize();
       const stranger = await fundedKeypair();
       const minter = Keypair.generate().publicKey;
@@ -304,7 +286,7 @@ describe("mint-controller", () => {
       try {
         await program.methods
           .configureMinter(minter, new BN(1), new BN(1))
-          .accounts({ mint, rateLimitAdmin: stranger.publicKey } as any)
+          .accounts({ mint, rateLimitAuthority: stranger.publicKey } as any)
           .signers([stranger])
           .rpc();
         assert.fail("expected ConstraintHasOne");
@@ -314,7 +296,7 @@ describe("mint-controller", () => {
     });
 
     it("rejects when limit or interval is zero", async () => {
-      const { mint, rateLimitAdmin } = await setupMintAndInitialize();
+      const { mint, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
 
       for (const [limit, interval] of [
@@ -322,7 +304,7 @@ describe("mint-controller", () => {
         [100, 0],
       ] as const) {
         try {
-          await configureMinter(mint, rateLimitAdmin, minter, limit, interval);
+          await configureMinter(mint, rateLimitAuthority, minter, limit, interval);
           assert.fail(`expected InvalidConfig for limit=${limit} interval=${interval}`);
         } catch (err: any) {
           expect(err.toString()).to.contain("InvalidConfig");
@@ -333,9 +315,9 @@ describe("mint-controller", () => {
 
   describe("revoke_minter", () => {
     it("admin closes the config PDA and reclaims rent", async () => {
-      const { mint, admin, rateLimitAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
-      await configureMinter(mint, rateLimitAdmin, minter, 1_000, 60);
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
 
       const adminBalanceBefore = await provider.connection.getBalance(admin.publicKey);
       await program.methods
@@ -351,15 +333,15 @@ describe("mint-controller", () => {
     });
 
     it("rejects from non-admin", async () => {
-      const { mint, rateLimitAdmin } = await setupMintAndInitialize();
+      const { mint, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
-      await configureMinter(mint, rateLimitAdmin, minter, 1_000, 60);
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
 
       try {
         await program.methods
           .revokeMinter(minter)
-          .accounts({ mint, admin: rateLimitAdmin.publicKey } as any)
-          .signers([rateLimitAdmin])
+          .accounts({ mint, admin: rateLimitAuthority.publicKey } as any)
+          .signers([rateLimitAuthority])
           .rpc();
         assert.fail("expected ConstraintHasOne");
       } catch (err: any) {
@@ -369,14 +351,14 @@ describe("mint-controller", () => {
   });
 
   describe("allowlist", () => {
-    it("first add_to_allowlist creates the PDA, subsequent adds reuse it", async () => {
-      const { mint, allowlistAdmin } = await setupMintAndInitialize();
+    it("first add_allowed_mint_recipient creates the PDA, subsequent adds reuse it", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       const a = Keypair.generate().publicKey;
       const b = Keypair.generate().publicKey;
 
-      await addToAllowlist(mint, allowlistAdmin, minter, a);
-      await addToAllowlist(mint, allowlistAdmin, minter, b);
+      await addAllowedMintRecipient(mint, admin, minter, a);
+      await addAllowedMintRecipient(mint, admin, minter, b);
 
       const al = await program.account.mintAllowlistConfig.fetch(allowlistPda(mint, minter));
       const got = al.addresses.map((p: PublicKey) => p.toBase58()).sort();
@@ -384,26 +366,26 @@ describe("mint-controller", () => {
     });
 
     it("rejects duplicate adds", async () => {
-      const { mint, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       const addr = Keypair.generate().publicKey;
-      await addToAllowlist(mint, allowlistAdmin, minter, addr);
+      await addAllowedMintRecipient(mint, admin, minter, addr);
       try {
-        await addToAllowlist(mint, allowlistAdmin, minter, addr);
+        await addAllowedMintRecipient(mint, admin, minter, addr);
         assert.fail("expected AddressAlreadyAllowlisted");
       } catch (err: any) {
         expect(err.toString()).to.contain("AddressAlreadyAllowlisted");
       }
     });
 
-    it("remove_from_allowlist errors before any add has been done", async () => {
-      const { mint, allowlistAdmin } = await setupMintAndInitialize();
+    it("remove_allowed_mint_recipient errors before any add has been done", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       try {
         await program.methods
-          .removeFromAllowlist(minter, Keypair.generate().publicKey)
-          .accounts({ mint, allowlistAdmin: allowlistAdmin.publicKey } as any)
-          .signers([allowlistAdmin])
+          .removeAllowedMintRecipient(minter, Keypair.generate().publicKey)
+          .accounts({ mint, admin: admin.publicKey } as any)
+          .signers([admin])
           .rpc();
         assert.fail("expected AccountNotInitialized");
       } catch (err: any) {
@@ -411,18 +393,18 @@ describe("mint-controller", () => {
       }
     });
 
-    it("remove_from_allowlist removes an existing entry", async () => {
-      const { mint, allowlistAdmin } = await setupMintAndInitialize();
+    it("remove_allowed_mint_recipient removes an existing entry", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       const a = Keypair.generate().publicKey;
       const b = Keypair.generate().publicKey;
-      await addToAllowlist(mint, allowlistAdmin, minter, a);
-      await addToAllowlist(mint, allowlistAdmin, minter, b);
+      await addAllowedMintRecipient(mint, admin, minter, a);
+      await addAllowedMintRecipient(mint, admin, minter, b);
 
       await program.methods
-        .removeFromAllowlist(minter, a)
-        .accounts({ mint, allowlistAdmin: allowlistAdmin.publicKey } as any)
-        .signers([allowlistAdmin])
+        .removeAllowedMintRecipient(minter, a)
+        .accounts({ mint, admin: admin.publicKey } as any)
+        .signers([admin])
         .rpc();
 
       const al = await program.account.mintAllowlistConfig.fetch(allowlistPda(mint, minter));
@@ -430,17 +412,17 @@ describe("mint-controller", () => {
       expect(got).to.deep.equal([b.toBase58()]);
     });
 
-    it("remove_from_allowlist on a missing entry errors", async () => {
-      const { mint, allowlistAdmin } = await setupMintAndInitialize();
+    it("remove_allowed_mint_recipient on a missing entry errors", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       const a = Keypair.generate().publicKey;
-      await addToAllowlist(mint, allowlistAdmin, minter, a);
+      await addAllowedMintRecipient(mint, admin, minter, a);
 
       try {
         await program.methods
-          .removeFromAllowlist(minter, Keypair.generate().publicKey)
-          .accounts({ mint, allowlistAdmin: allowlistAdmin.publicKey } as any)
-          .signers([allowlistAdmin])
+          .removeAllowedMintRecipient(minter, Keypair.generate().publicKey)
+          .accounts({ mint, admin: admin.publicKey } as any)
+          .signers([admin])
           .rpc();
         assert.fail("expected AddressNotAllowlisted");
       } catch (err: any) {
@@ -451,7 +433,7 @@ describe("mint-controller", () => {
 
   describe("mint_tokens", () => {
     it("mints to a whitelisted recipient and decrements remaining", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
       const recipient = Keypair.generate();
       const recipientAta = await createAccount(
@@ -461,8 +443,8 @@ describe("mint-controller", () => {
         recipient.publicKey,
       );
 
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000_000, 86_400);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000_000, 86_400);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
 
       await program.methods
         .mintTokens(new BN(400_000))
@@ -470,8 +452,6 @@ describe("mint-controller", () => {
           minter: minter.publicKey,
           mint,
           recipientTokenAccount: recipientAta,
-          recipient: recipient.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minter])
         .rpc();
@@ -486,7 +466,7 @@ describe("mint-controller", () => {
     });
 
     it("rejects when amount exceeds available capacity", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
       const recipient = Keypair.generate();
       const recipientAta = await createAccount(
@@ -495,8 +475,8 @@ describe("mint-controller", () => {
         mint,
         recipient.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 100, 86_400);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 100, 86_400);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
 
       try {
         await program.methods
@@ -505,8 +485,6 @@ describe("mint-controller", () => {
             minter: minter.publicKey,
             mint,
             recipientTokenAccount: recipientAta,
-            recipient: recipient.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minter])
           .rpc();
@@ -517,7 +495,7 @@ describe("mint-controller", () => {
     });
 
     it("rejects when recipient is not on the allowlist", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
       const allowed = Keypair.generate();
       const notAllowed = Keypair.generate();
@@ -527,9 +505,9 @@ describe("mint-controller", () => {
         mint,
         notAllowed.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000, 60);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
       // Allowlist *exists* (so account loads succeed) but only contains `allowed`.
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, allowed.publicKey);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, allowed.publicKey);
 
       try {
         await program.methods
@@ -538,8 +516,6 @@ describe("mint-controller", () => {
             minter: minter.publicKey,
             mint,
             recipientTokenAccount: notAllowedAta,
-            recipient: notAllowed.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minter])
           .rpc();
@@ -550,7 +526,7 @@ describe("mint-controller", () => {
     });
 
     it("two minters of the same mint have independent capacity and allowlists", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minterA = await fundedKeypair();
       const minterB = await fundedKeypair();
       const recipientA = Keypair.generate();
@@ -568,10 +544,10 @@ describe("mint-controller", () => {
         recipientB.publicKey,
       );
 
-      await configureMinter(mint, rateLimitAdmin, minterA.publicKey, 1_000, 86_400);
-      await configureMinter(mint, rateLimitAdmin, minterB.publicKey, 5_000, 86_400);
-      await addToAllowlist(mint, allowlistAdmin, minterA.publicKey, recipientA.publicKey);
-      await addToAllowlist(mint, allowlistAdmin, minterB.publicKey, recipientB.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minterA.publicKey, 1_000, 86_400);
+      await configureMinter(mint, rateLimitAuthority, minterB.publicKey, 5_000, 86_400);
+      await addAllowedMintRecipient(mint, admin, minterA.publicKey, recipientA.publicKey);
+      await addAllowedMintRecipient(mint, admin, minterB.publicKey, recipientB.publicKey);
 
       // Minter A consumes its full capacity.
       await program.methods
@@ -580,8 +556,6 @@ describe("mint-controller", () => {
           minter: minterA.publicKey,
           mint,
           recipientTokenAccount: ataA,
-          recipient: recipientA.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minterA])
         .rpc();
@@ -593,8 +567,6 @@ describe("mint-controller", () => {
           minter: minterB.publicKey,
           mint,
           recipientTokenAccount: ataB,
-          recipient: recipientB.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minterB])
         .rpc();
@@ -607,8 +579,6 @@ describe("mint-controller", () => {
             minter: minterB.publicKey,
             mint,
             recipientTokenAccount: ataA,
-            recipient: recipientA.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minterB])
           .rpc();
@@ -618,20 +588,20 @@ describe("mint-controller", () => {
       }
     });
 
-    it("rejects when recipient_token_account.authority != recipient", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+    it("rejects when destination token account owner is not allowlisted", async () => {
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
-      const recipient = Keypair.generate();
+      const allowlistedOwner = Keypair.generate();
       const otherOwner = Keypair.generate();
-      // ATA owned by someone other than `recipient`.
+      // ATA owned by someone other than the allowlisted owner.
       const wrongAta = await createAccount(
         provider.connection,
         payer.payer,
         mint,
         otherOwner.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000, 60);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, allowlistedOwner.publicKey);
 
       try {
         await program.methods
@@ -640,19 +610,17 @@ describe("mint-controller", () => {
             minter: minter.publicKey,
             mint,
             recipientTokenAccount: wrongAta,
-            recipient: recipient.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected ConstraintTokenOwner");
+        assert.fail("expected RecipientNotAllowlisted");
       } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintTokenOwner|TokenOwnerMismatch/);
+        expect(err.toString()).to.contain("RecipientNotAllowlisted");
       }
     });
 
-    it("succeeds when payer != minter (role / fee-payer split)", async () => {
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+    it("succeeds when minter holds zero SOL (fee payer is implicit)", async () => {
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       // `minter` intentionally has zero SOL — only the role signature, never gas.
       const minter = Keypair.generate();
       const recipient = Keypair.generate();
@@ -662,8 +630,8 @@ describe("mint-controller", () => {
         mint,
         recipient.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000, 60);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
 
       await program.methods
         .mintTokens(new BN(500))
@@ -671,8 +639,6 @@ describe("mint-controller", () => {
           minter: minter.publicKey,
           mint,
           recipientTokenAccount: ata,
-          recipient: recipient.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minter])
         .rpc();
@@ -689,7 +655,7 @@ describe("mint-controller", () => {
       // limit=1000, interval=10s → 100/sec replenishment. Mint full, sleep ~3s,
       // verify ~300 has replenished. Tolerances are loose because validator clock
       // ticks at second granularity.
-      const { mint, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
       const recipient = Keypair.generate();
       const ata = await createAccount(
@@ -698,8 +664,8 @@ describe("mint-controller", () => {
         mint,
         recipient.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000, 10);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 10);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
 
       // Drain the bucket.
       await program.methods
@@ -708,8 +674,6 @@ describe("mint-controller", () => {
           minter: minter.publicKey,
           mint,
           recipientTokenAccount: ata,
-          recipient: recipient.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minter])
         .rpc();
@@ -722,8 +686,6 @@ describe("mint-controller", () => {
             minter: minter.publicKey,
             mint,
             recipientTokenAccount: ata,
-            recipient: recipient.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minter])
           .rpc();
@@ -740,8 +702,6 @@ describe("mint-controller", () => {
           minter: minter.publicKey,
           mint,
           recipientTokenAccount: ata,
-          recipient: recipient.publicKey,
-          payer: payer.publicKey,
         } as any)
         .signers([minter])
         .rpc();
@@ -752,7 +712,7 @@ describe("mint-controller", () => {
     });
 
     it("revoked minter can no longer mint", async () => {
-      const { mint, admin, rateLimitAdmin, allowlistAdmin } = await setupMintAndInitialize();
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = await fundedKeypair();
       const recipient = Keypair.generate();
       const ata = await createAccount(
@@ -761,8 +721,8 @@ describe("mint-controller", () => {
         mint,
         recipient.publicKey,
       );
-      await configureMinter(mint, rateLimitAdmin, minter.publicKey, 1_000, 60);
-      await addToAllowlist(mint, allowlistAdmin, minter.publicKey, recipient.publicKey);
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
 
       await program.methods
         .revokeMinter(minter.publicKey)
@@ -777,8 +737,6 @@ describe("mint-controller", () => {
             minter: minter.publicKey,
             mint,
             recipientTokenAccount: ata,
-            recipient: recipient.publicKey,
-            payer: payer.publicKey,
           } as any)
           .signers([minter])
           .rpc();

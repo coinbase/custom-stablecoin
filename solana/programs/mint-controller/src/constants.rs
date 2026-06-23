@@ -2,7 +2,7 @@
 ///
 /// The seed strings are part of the on-chain layout: changing any of them is a
 /// breaking change that would orphan every existing PDA. Treat them as constants.
-/// Seed for the per-mint roles PDA: holds admin / rate_limit_admin / allowlist_admin.
+/// Seed for the per-mint roles PDA: holds admin / rate_limit_authority.
 pub const MINT_ROLES_SEED: &[u8] = b"mint_roles";
 
 /// Seed for the per-mint mint-authority PDA. The PDA itself holds no state; its
