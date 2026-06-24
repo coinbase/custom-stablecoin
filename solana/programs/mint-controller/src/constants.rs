@@ -2,6 +2,10 @@
 ///
 /// The seed strings are part of the on-chain layout: changing any of them is a
 /// breaking change that would orphan every existing PDA. Treat them as constants.
+
+/// Seed for the program-wide singleton PDA: holds the emergency pause flag.
+pub const GLOBAL_CONFIG_SEED: &[u8] = b"global_config";
+
 /// Seed for the per-mint roles PDA: holds admin / rate_limit_authority.
 pub const MINT_ROLES_SEED: &[u8] = b"mint_roles";
 

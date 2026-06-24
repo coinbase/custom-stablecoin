@@ -19,22 +19,26 @@ and gates `mint_to` calls behind:
 
 | Role | Key type | Capability |
 | --- | --- | --- |
-| `admin` (DEFAULT_ADMIN) | Cold (SCM) | Rotate role authorities, manage recipient allowlists (`add_allowed_mint_recipient` / `remove_allowed_mint_recipient`), revoke `MINT_ROLE` (close minter PDA). |
+| `admin` (DEFAULT_ADMIN) | Cold (SCM) | Rotate role authorities, manage recipient allowlists (`add_allowed_mint_recipient` / `remove_allowed_mint_recipient`), revoke `MINT_ROLE` (close minter + allowlist PDAs). |
 | `MINT_ROLE` | Hot (CCS) | `mint_tokens` up to the configured rate limit. Granted *implicitly* by `configure_minter` creating the per-(mint, minter) config PDA. |
 | `rate_limit_authority` | Cold (SCM) | `configure_minter` (set or update limit + interval; also doubles as the role grant). |
+| global `admin` | Cold (SCM) | Emergency pause/unpause (`set_paused`) via the program-wide `GlobalConfig` PDA. |
 
 ## Instructions
 
 | Function | Caller | Purpose |
 | --- | --- | --- |
+| `initialize_global` | payer | Create the program-wide singleton (must run once post-deploy before any mint). |
+| `set_paused` | global `admin` | Halt or resume all `mint_tokens` calls program-wide. |
+| `update_global_admin` | global `admin` | Rotate the global pause authority. |
 | `initialize` | payer | Create per-mint roles PDA. SPL mint authority must already be the program's `mint_authority` PDA. |
 | `update_admin` | `admin` | Rotate the admin key. |
 | `update_rate_limit_authority` | `admin` | Rotate the rate-limit authority key. |
 | `configure_minter` | `rate_limit_authority` | Create or update a `(mint, minter)` rate-limit config (preserves remaining capacity on reconfigure; also grants `MINT_ROLE`). |
-| `revoke_minter` | `admin` | Close a `(mint, minter)` config (revokes `MINT_ROLE`, returns rent). |
+| `revoke_minter` | `admin` | Close a `(mint, minter)` config and allowlist PDA if present (revokes `MINT_ROLE`, returns rent). |
 | `add_allowed_mint_recipient` | `admin` | Lazily create the `(mint, minter)` allowlist on first call, push `recipient`. |
 | `remove_allowed_mint_recipient` | `admin` | Remove `recipient` from the allowlist. |
-| `mint_tokens` | `minter` (signer) | Rate-limited mint to a whitelisted recipient (mirrors SPL `mint_to` accounts: mint, destination token account, authority). |
+| `mint_tokens` | `minter` (signer) | Rate-limited mint to a whitelisted recipient (mirrors SPL `mint_to` accounts: mint, destination token account, authority). Requires `GlobalConfig` to be unpaused. |
 
 ## PDAs
 
@@ -43,12 +47,18 @@ All PDAs live under this program's ID; seeds are constants in
 
 | PDA | Seeds | Purpose |
 | --- | --- | --- |
+| `GlobalConfig` | `[b"global_config"]` | Program-wide emergency pause flag and global admin. |
 | `MintRoles` | `[b"mint_roles", mint]` | Holds `admin`, `rate_limit_authority`. |
 | `MintAuthority` | `[b"mint_authority", mint]` | Empty marker PDA whose address is the SPL mint authority and signs `mint_to` CPIs. |
 | `MintRateLimitConfig` | `[b"mint_rate_limit_config", mint, minter]` | Per-(mint, minter) rate-limit state. Existence == `MINT_ROLE` granted. |
 | `MintAllowlistConfig` | `[b"mint_allowlist_config", mint, minter]` | Per-(mint, minter) allowlist (capped at `MAX_ALLOWLIST_LEN = 100`). |
 
 ## Operational pre-flight
+
+**Deploy ordering (run immediately after deploy to avoid frontruns):**
+
+1. `initialize_global(admin)` — creates the program-wide pause singleton (one-time).
+2. For each stablecoin mint: transfer SPL mint authority to the program PDA, then `initialize(admin, rate_limit_authority)`.
 
 Before calling `initialize` for a new mint, the *current* SPL mint authority must hand the
 authority over to the program's `mint_authority` PDA (the program cannot do this itself —

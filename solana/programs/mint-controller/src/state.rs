@@ -7,6 +7,17 @@ use anchor_lang::prelude::*;
 // reordering does not affect the discriminator but does break borsh layout, so
 // treat the field order as part of the on-chain layout too.
 
+/// Program-wide singleton PDA. Gates all `mint_tokens` calls behind an
+/// admin-controlled emergency pause.
+#[account]
+#[derive(InitSpace)]
+pub struct GlobalConfig {
+    /// Cold key (SCM) that can pause/unpause minting and rotate itself.
+    pub admin: Pubkey,
+    pub paused: bool,
+    pub bump: u8,
+}
+
 /// Per-mint role-holder PDA. There is exactly one of these per SPL mint.
 ///
 /// `MINT_ROLE` (the right to call `mint_tokens`) is *not* stored here: it is
@@ -52,6 +63,9 @@ pub struct MintRateLimitConfig {
     /// Remaining capacity *as of `last_consumed`*. Effective current capacity
     /// is `min(remaining + (now - last_consumed) * limit / interval, limit)`.
     pub remaining: u64,
+    /// Whether this PDA has been initialized by `configure_minter`. Used instead
+    /// of `bump == 0` because a PDA bump can theoretically be zero.
+    pub is_initialized: bool,
     pub bump: u8,
 }
 
