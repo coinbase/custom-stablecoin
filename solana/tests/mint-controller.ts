@@ -22,6 +22,7 @@ const MINT_ROLES_SEED = Buffer.from("mint_roles");
 const MINT_AUTHORITY_SEED = Buffer.from("mint_authority");
 const MINT_RATE_LIMIT_CONFIG_SEED = Buffer.from("mint_rate_limit_config");
 const MINT_ALLOWLIST_CONFIG_SEED = Buffer.from("mint_allowlist_config");
+const GLOBAL_CONFIG_SEED = Buffer.from("global_config");
 
 describe("mint-controller", () => {
   const provider = anchor.AnchorProvider.env();
@@ -30,13 +31,27 @@ describe("mint-controller", () => {
   const program = anchor.workspace.mintController as Program<MintController>;
   const payer = provider.wallet as anchor.Wallet;
 
+  const globalAdmin = Keypair.generate();
+
+  before(async () => {
+    await fundedKeypairFor(globalAdmin);
+    try {
+      await program.methods
+        .initializeGlobal(globalAdmin.publicKey)
+        .accounts({ payer: payer.publicKey } as any)
+        .rpc();
+    } catch (err: any) {
+      // Safe to re-run the suite: global config is a one-time init.
+      expect(err.toString()).to.match(/already in use|0x0/);
+    }
+  });
+
   // Helpers ----------------------------------------------------------------
 
-  // Fund a fresh keypair from the provider wallet via SystemProgram.transfer
-  // rather than `requestAirdrop`, because the local test-validator's airdrop
-  // RPC is rate-limited / unreliable under the parallel load anchor-test creates.
-  async function fundedKeypair(lamports = LAMPORTS_PER_SOL / 10): Promise<Keypair> {
-    const kp = Keypair.generate();
+  async function fundedKeypairFor(
+    kp: Keypair,
+    lamports = LAMPORTS_PER_SOL / 10,
+  ): Promise<Keypair> {
     const tx = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: payer.publicKey,
@@ -46,6 +61,17 @@ describe("mint-controller", () => {
     );
     await provider.sendAndConfirm(tx, []);
     return kp;
+  }
+
+  async function fundedKeypair(lamports = LAMPORTS_PER_SOL / 10): Promise<Keypair> {
+    return fundedKeypairFor(Keypair.generate(), lamports);
+  }
+
+  function globalConfigPda(): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [GLOBAL_CONFIG_SEED],
+      program.programId,
+    )[0];
   }
 
   function rolesPda(mint: PublicKey): PublicKey {
@@ -322,7 +348,7 @@ describe("mint-controller", () => {
       const adminBalanceBefore = await provider.connection.getBalance(admin.publicKey);
       await program.methods
         .revokeMinter(minter)
-        .accounts({ mint, admin: admin.publicKey } as any)
+        .accounts({ mint, admin: admin.publicKey, allowlist: null } as any)
         .signers([admin])
         .rpc();
       const adminBalanceAfter = await provider.connection.getBalance(admin.publicKey);
@@ -330,6 +356,31 @@ describe("mint-controller", () => {
 
       const acct = await provider.connection.getAccountInfo(configPda(mint, minter));
       expect(acct).to.equal(null);
+    });
+
+    it("also closes the allowlist PDA when one exists", async () => {
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
+      const minter = Keypair.generate().publicKey;
+      const recipient = Keypair.generate().publicKey;
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
+      await addAllowedMintRecipient(mint, admin, minter, recipient);
+
+      await program.methods
+        .revokeMinter(minter)
+        .accounts({
+          mint,
+          admin: admin.publicKey,
+          allowlist: allowlistPda(mint, minter),
+        } as any)
+        .signers([admin])
+        .rpc();
+
+      const configAcct = await provider.connection.getAccountInfo(configPda(mint, minter));
+      const allowlistAcct = await provider.connection.getAccountInfo(
+        allowlistPda(mint, minter),
+      );
+      expect(configAcct).to.equal(null);
+      expect(allowlistAcct).to.equal(null);
     });
 
     it("rejects from non-admin", async () => {
@@ -340,13 +391,102 @@ describe("mint-controller", () => {
       try {
         await program.methods
           .revokeMinter(minter)
-          .accounts({ mint, admin: rateLimitAuthority.publicKey } as any)
+          .accounts({ mint, admin: rateLimitAuthority.publicKey, allowlist: null } as any)
           .signers([rateLimitAuthority])
           .rpc();
         assert.fail("expected ConstraintHasOne");
       } catch (err: any) {
         expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
       }
+    });
+  });
+
+  describe("pause", () => {
+    it("set_paused(true) halts minting; set_paused(false) restores it", async () => {
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
+      const minter = await fundedKeypair();
+      const recipient = Keypair.generate();
+      const ata = await createAccount(
+        provider.connection,
+        payer.payer,
+        mint,
+        recipient.publicKey,
+      );
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
+      await addAllowedMintRecipient(mint, admin, minter.publicKey, recipient.publicKey);
+
+      await program.methods
+        .setPaused(true)
+        .accounts({ admin: globalAdmin.publicKey } as any)
+        .signers([globalAdmin])
+        .rpc();
+
+      try {
+        await program.methods
+          .mintTokens(new BN(1))
+          .accounts({
+            minter: minter.publicKey,
+            mint,
+            recipientTokenAccount: ata,
+          } as any)
+          .signers([minter])
+          .rpc();
+        assert.fail("expected MintingPaused");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("MintingPaused");
+      }
+
+      await program.methods
+        .setPaused(false)
+        .accounts({ admin: globalAdmin.publicKey } as any)
+        .signers([globalAdmin])
+        .rpc();
+
+      await program.methods
+        .mintTokens(new BN(1))
+        .accounts({
+          minter: minter.publicKey,
+          mint,
+          recipientTokenAccount: ata,
+        } as any)
+        .signers([minter])
+        .rpc();
+
+      const tokenAcct = await getAccount(provider.connection, ata);
+      expect(tokenAcct.amount.toString()).to.equal("1");
+    });
+
+    it("rejects set_paused from non-admin", async () => {
+      const stranger = await fundedKeypair();
+      try {
+        await program.methods
+          .setPaused(true)
+          .accounts({ admin: stranger.publicKey } as any)
+          .signers([stranger])
+          .rpc();
+        assert.fail("expected ConstraintHasOne");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
+      }
+    });
+
+    it("global admin can rotate via update_global_admin", async () => {
+      const newGlobalAdmin = await fundedKeypair();
+      await program.methods
+        .updateGlobalAdmin(newGlobalAdmin.publicKey)
+        .accounts({ admin: globalAdmin.publicKey } as any)
+        .signers([globalAdmin])
+        .rpc();
+
+      const cfg = await program.account.globalConfig.fetch(globalConfigPda());
+      expect(cfg.admin.toBase58()).to.equal(newGlobalAdmin.publicKey.toBase58());
+
+      // Restore for subsequent tests.
+      await program.methods
+        .updateGlobalAdmin(globalAdmin.publicKey)
+        .accounts({ admin: newGlobalAdmin.publicKey } as any)
+        .signers([newGlobalAdmin])
+        .rpc();
     });
   });
 
@@ -726,7 +866,11 @@ describe("mint-controller", () => {
 
       await program.methods
         .revokeMinter(minter.publicKey)
-        .accounts({ mint, admin: admin.publicKey } as any)
+        .accounts({
+          mint,
+          admin: admin.publicKey,
+          allowlist: allowlistPda(mint, minter.publicKey),
+        } as any)
         .signers([admin])
         .rpc();
 

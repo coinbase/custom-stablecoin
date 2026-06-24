@@ -24,4 +24,6 @@ pub enum MintControllerError {
     Overflow,
     #[msg("Mint amount must be greater than zero")]
     InvalidAmount,
+    #[msg("All minting is paused")]
+    MintingPaused,
 }

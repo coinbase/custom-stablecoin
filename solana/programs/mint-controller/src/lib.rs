@@ -18,7 +18,37 @@ declare_id!("AspjtWo7pCJkiigkfvc5gyMmkhGWpniqfbUMooGg58GC");
 pub mod mint_controller {
     use super::*;
 
+    /// Initialize the program-wide singleton (emergency pause authority).
+    ///
+    /// Must be called once post-deploy before any `mint_tokens` can succeed.
+    /// The `init` constraint prevents re-initialization; run immediately after
+    /// deploy with the intended admin to avoid a frontrun setting wrong roles.
+    pub fn initialize_global(ctx: Context<InitializeGlobal>, admin: Pubkey) -> Result<()> {
+        let global_config = &mut ctx.accounts.global_config;
+        global_config.admin = admin;
+        global_config.paused = false;
+        global_config.bump = ctx.bumps.global_config;
+
+        msg!("initialize_global admin={}", admin);
+        Ok(())
+    }
+
+    pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+        ctx.accounts.global_config.paused = paused;
+        msg!("set_paused paused={}", paused);
+        Ok(())
+    }
+
+    pub fn update_global_admin(ctx: Context<UpdateGlobalAdmin>, new_admin: Pubkey) -> Result<()> {
+        ctx.accounts.global_config.admin = new_admin;
+        msg!("update_global_admin new_admin={}", new_admin);
+        Ok(())
+    }
+
     /// Initialize the per-mint role-holder PDA and mint-authority PDA for `mint`.
+    ///
+    /// The `init` constraint on `roles` prevents re-initialization; run with
+    /// the intended admin keys immediately after transferring SPL mint authority.
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
@@ -81,15 +111,15 @@ pub mod mint_controller {
         let bump = ctx.bumps.config;
         let config = &mut ctx.accounts.config;
 
-        // Fresh init (Anchor zero-inits accounts; bump is always non-zero for
-        // an established PDA). Reconfigure leaves `remaining` and
-        // `last_consumed` intact so an in-flight rate-limit window survives.
-        if config.bump == 0 {
+        // Fresh init. Reconfigure leaves `remaining` and `last_consumed` intact
+        // so an in-flight rate-limit window survives.
+        if !config.is_initialized {
             let now = Clock::get()?.unix_timestamp;
             config.minter_public_key = minter;
             config.remaining = limit;
             config.last_consumed = now;
             config.bump = bump;
+            config.is_initialized = true;
         }
 
         config.limit = limit;
@@ -105,8 +135,13 @@ pub mod mint_controller {
         Ok(())
     }
 
-    /// Revoke `MINT_ROLE` from `minter` for `mint` by closing the config PDA.
+    /// Revoke `MINT_ROLE` from `minter` for `mint` by closing the config PDA
+    /// and, if present, the allowlist PDA.
     pub fn revoke_minter(ctx: Context<RevokeMinter>, minter: Pubkey) -> Result<()> {
+        if let Some(allowlist) = ctx.accounts.allowlist.as_ref() {
+            allowlist.close(ctx.accounts.admin.to_account_info())?;
+        }
+
         msg!(
             "revoke_minter mint={} minter={}",
             ctx.accounts.mint.key(),
@@ -123,15 +158,7 @@ pub mod mint_controller {
     ) -> Result<()> {
         let bump = ctx.bumps.allowlist;
         let allowlist = &mut ctx.accounts.allowlist;
-
-        // `init_if_needed` doesn't run any handler logic when the account
-        // already exists, so the bump persists across calls. On the very first
-        // call, the freshly-initialized account has bump=0 and we need to set
-        // it; on subsequent calls we leave the existing bump alone.
-        if allowlist.bump == 0 {
-            allowlist.bump = bump;
-        }
-
+        allowlist.bump = bump;
         require!(
             !allowlist.addresses.contains(&recipient),
             MintControllerError::AddressAlreadyAllowlisted
@@ -182,6 +209,10 @@ pub mod mint_controller {
 
     /// Rate-limited mint to a whitelisted recipient.
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        require!(
+            !ctx.accounts.global_config.paused,
+            MintControllerError::MintingPaused
+        );
         require!(amount > 0, MintControllerError::InvalidAmount);
         require!(
             ctx.accounts
@@ -225,6 +256,49 @@ pub mod mint_controller {
 /* ------------------------------------------------------------------------- */
 /*                              Accounts contexts                            */
 /* ------------------------------------------------------------------------- */
+
+#[derive(Accounts)]
+pub struct InitializeGlobal<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + GlobalConfig::INIT_SPACE,
+        seeds = [GLOBAL_CONFIG_SEED],
+        bump,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetPaused<'info> {
+    #[account(
+        mut,
+        seeds = [GLOBAL_CONFIG_SEED],
+        bump = global_config.bump,
+        has_one = admin @ MintControllerError::Unauthorized,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub admin: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateGlobalAdmin<'info> {
+    #[account(
+        mut,
+        seeds = [GLOBAL_CONFIG_SEED],
+        bump = global_config.bump,
+        has_one = admin @ MintControllerError::Unauthorized,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub admin: Signer<'info>,
+}
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -333,6 +407,14 @@ pub struct RevokeMinter<'info> {
     )]
     pub config: Account<'info, MintRateLimitConfig>,
 
+    /// Pass `null` when no allowlist PDA was ever created for this minter.
+    #[account(
+        mut,
+        seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
+        bump,
+    )]
+    pub allowlist: Option<Account<'info, MintAllowlistConfig>>,
+
     #[account(mut)]
     pub admin: Signer<'info>,
 }
@@ -391,6 +473,12 @@ pub struct MintTokens<'info> {
     /// MINT_ROLE-holding caller. Identifies which (mint, minter) config and
     /// allowlist to load via PDA seeds.
     pub minter: Signer<'info>,
+
+    #[account(
+        seeds = [GLOBAL_CONFIG_SEED],
+        bump = global_config.bump,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
 
     #[account(
         mut,
