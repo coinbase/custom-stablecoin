@@ -1,7 +1,17 @@
+use anchor_lang::prelude::Pubkey;
+use anchor_lang::pubkey;
+
 /// PDA seeds.
 ///
 /// The seed strings are part of the on-chain layout: changing any of them is a
 /// breaking change that would orphan every existing PDA. Treat them as constants.
+
+/// Placeholder cold (SCM) key. MUST be replaced with the real admin before mainnet
+/// deploy (same placeholder posture as declare_id!/program keypair).
+#[cfg(not(feature = "localnet"))]
+pub const INITIAL_GLOBAL_ADMIN: Pubkey = pubkey!("11111111111111111111111111111111");
+#[cfg(feature = "localnet")]
+pub const INITIAL_GLOBAL_ADMIN: Pubkey = pubkey!("naX3wmWkWyxxY1mBeva6mPEEegwKuGEXDarn41w6bfP");
 
 /// Seed for the program-wide singleton PDA: holds the emergency pause flag.
 pub const GLOBAL_CONFIG_SEED: &[u8] = b"global_config";

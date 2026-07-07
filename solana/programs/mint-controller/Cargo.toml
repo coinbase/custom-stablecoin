@@ -10,6 +10,7 @@ name = "mint_controller"
 
 [features]
 default = []
+localnet = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

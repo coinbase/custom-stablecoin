@@ -17,12 +17,17 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { assert, expect } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
 const MINT_ROLES_SEED = Buffer.from("mint_roles");
 const MINT_AUTHORITY_SEED = Buffer.from("mint_authority");
 const MINT_RATE_LIMIT_CONFIG_SEED = Buffer.from("mint_rate_limit_config");
 const MINT_ALLOWLIST_CONFIG_SEED = Buffer.from("mint_allowlist_config");
 const GLOBAL_CONFIG_SEED = Buffer.from("global_config");
+const INITIAL_GLOBAL_ADMIN = new PublicKey(
+  "naX3wmWkWyxxY1mBeva6mPEEegwKuGEXDarn41w6bfP",
+);
 
 describe("mint-controller", () => {
   const provider = anchor.AnchorProvider.env();
@@ -31,19 +36,31 @@ describe("mint-controller", () => {
   const program = anchor.workspace.mintController as Program<MintController>;
   const payer = provider.wallet as anchor.Wallet;
 
-  const globalAdmin = Keypair.generate();
+  const globalAdmin = Keypair.fromSecretKey(
+    Uint8Array.from(
+      JSON.parse(
+        fs.readFileSync(
+          path.join(__dirname, "keys", "global-admin.json"),
+          "utf-8",
+        ),
+      ),
+    ),
+  );
 
   before(async () => {
     await fundedKeypairFor(globalAdmin);
     try {
       await program.methods
-        .initializeGlobal(globalAdmin.publicKey)
+        .initializeGlobal()
         .accounts({ payer: payer.publicKey } as any)
         .rpc();
     } catch (err: any) {
       // Safe to re-run the suite: global config is a one-time init.
       expect(err.toString()).to.match(/already in use|0x0/);
     }
+
+    const cfg = await program.account.globalConfig.fetch(globalConfigPda());
+    expect(cfg.admin.toBase58()).to.equal(INITIAL_GLOBAL_ADMIN.toBase58());
   });
 
   // Helpers ----------------------------------------------------------------
@@ -142,7 +159,9 @@ describe("mint-controller", () => {
       .accounts({
         mint,
         payer: payer.publicKey,
+        globalAdmin: globalAdmin.publicKey,
       } as any)
+      .signers([globalAdmin])
       .rpc();
 
     return { mint, admin, rateLimitAuthority };
@@ -208,11 +227,52 @@ describe("mint-controller", () => {
       try {
         await program.methods
           .initialize(admin.publicKey, admin.publicKey)
-          .accounts({ mint, payer: payer.publicKey } as any)
+          .accounts({
+            mint,
+            payer: payer.publicKey,
+            globalAdmin: globalAdmin.publicKey,
+          } as any)
+          .signers([globalAdmin])
           .rpc();
         assert.fail("expected InvalidMintAuthority");
       } catch (err: any) {
         expect(err.error?.errorCode?.code ?? err.toString()).to.contain("InvalidMintAuthority");
+      }
+    });
+
+    it("rejects when the caller is not the global admin", async () => {
+      const mint = await createMint(
+        provider.connection,
+        payer.payer,
+        payer.publicKey,
+        null,
+        6,
+      );
+      const mintAuth = mintAuthorityPda(mint);
+      await setAuthority(
+        provider.connection,
+        payer.payer,
+        mint,
+        payer.publicKey,
+        AuthorityType.MintTokens,
+        mintAuth,
+      );
+
+      const attacker = await fundedKeypair();
+      const admin = Keypair.generate();
+      try {
+        await program.methods
+          .initialize(admin.publicKey, admin.publicKey)
+          .accounts({
+            mint,
+            payer: payer.publicKey,
+            globalAdmin: attacker.publicKey,
+          } as any)
+          .signers([attacker])
+          .rpc();
+        assert.fail("expected Unauthorized");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/Unauthorized|ConstraintHasOne/);
       }
     });
   });

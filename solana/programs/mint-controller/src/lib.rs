@@ -21,15 +21,15 @@ pub mod mint_controller {
     /// Initialize the program-wide singleton (emergency pause authority).
     ///
     /// Must be called once post-deploy before any `mint_tokens` can succeed.
-    /// The `init` constraint prevents re-initialization; run immediately after
-    /// deploy with the intended admin to avoid a frontrun setting wrong roles.
-    pub fn initialize_global(ctx: Context<InitializeGlobal>, admin: Pubkey) -> Result<()> {
+    /// The `init` constraint prevents re-initialization. The initial admin is
+    /// hardcoded at compile time so a frontrun cannot set a different admin.
+    pub fn initialize_global(ctx: Context<InitializeGlobal>) -> Result<()> {
         let global_config = &mut ctx.accounts.global_config;
-        global_config.admin = admin;
+        global_config.admin = INITIAL_GLOBAL_ADMIN;
         global_config.paused = false;
         global_config.bump = ctx.bumps.global_config;
 
-        msg!("initialize_global admin={}", admin);
+        msg!("initialize_global admin={}", INITIAL_GLOBAL_ADMIN);
         Ok(())
     }
 
@@ -47,13 +47,19 @@ pub mod mint_controller {
 
     /// Initialize the per-mint role-holder PDA and mint-authority PDA for `mint`.
     ///
-    /// The `init` constraint on `roles` prevents re-initialization; run with
-    /// the intended admin keys immediately after transferring SPL mint authority.
+    /// The `init` constraint on `roles` prevents re-initialization. Only the
+    /// global admin may call this instruction.
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
         rate_limit_authority: Pubkey,
     ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.global_config.admin,
+            ctx.accounts.global_admin.key(),
+            MintControllerError::Unauthorized
+        );
+
         // Done in the handler rather than as an account constraint to keep the
         // forward reference (mint -> mint_authority) out of the account struct.
         require!(
@@ -303,6 +309,14 @@ pub struct UpdateGlobalAdmin<'info> {
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [GLOBAL_CONFIG_SEED],
+        bump = global_config.bump,
+    )]
+    pub global_config: Account<'info, GlobalConfig>,
+
+    pub global_admin: Signer<'info>,
 
     #[account(
         init,
