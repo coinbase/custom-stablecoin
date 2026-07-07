@@ -28,10 +28,10 @@ and gates `mint_to` calls behind:
 
 | Function | Caller | Purpose |
 | --- | --- | --- |
-| `initialize_global` | payer | Create the program-wide singleton (must run once post-deploy before any mint). |
+| `initialize_global` | payer | Create the program-wide singleton (must run once post-deploy before any mint). Initial admin is hardcoded at compile time. |
 | `set_paused` | global `admin` | Halt or resume all `mint_tokens` calls program-wide. |
 | `update_global_admin` | global `admin` | Rotate the global pause authority. |
-| `initialize` | payer | Create per-mint roles PDA. SPL mint authority must already be the program's `mint_authority` PDA. |
+| `initialize` | global `admin` | Create per-mint roles PDA. SPL mint authority must already be the program's `mint_authority` PDA. |
 | `update_admin` | `admin` | Rotate the admin key. |
 | `update_rate_limit_authority` | `admin` | Rotate the rate-limit authority key. |
 | `configure_minter` | `rate_limit_authority` | Create or update a `(mint, minter)` rate-limit config (preserves remaining capacity on reconfigure; also grants `MINT_ROLE`). |
@@ -57,8 +57,8 @@ All PDAs live under this program's ID; seeds are constants in
 
 **Deploy ordering (run immediately after deploy to avoid frontruns):**
 
-1. `initialize_global(admin)` — creates the program-wide pause singleton (one-time).
-2. For each stablecoin mint: transfer SPL mint authority to the program PDA, then `initialize(admin, rate_limit_authority)`.
+1. `initialize_global()` — creates the program-wide pause singleton (one-time). The initial global admin is hardcoded in `INITIAL_GLOBAL_ADMIN` (`constants.rs`); set this to the real cold (SCM) key before mainnet deploy.
+2. For each stablecoin mint: transfer SPL mint authority to the program PDA, then `initialize(admin, rate_limit_authority)` signed by the global admin.
 
 Before calling `initialize` for a new mint, the *current* SPL mint authority must hand the
 authority over to the program's `mint_authority` PDA (the program cannot do this itself —
@@ -77,7 +77,7 @@ Then:
 spl-token authorize <MINT_ADDRESS> mint <MINT_AUTHORITY_PDA>
 ```
 
-After that, anyone can call `initialize(admin, rate_limit_authority)`.
+After that, only the global admin may call `initialize(admin, rate_limit_authority)`.
 
 ## Build / test
 
@@ -87,7 +87,7 @@ After that, anyone can call `initialize(admin, rate_limit_authority)`.
 cd solana
 yarn install
 anchor build
-anchor test          # spins up a local validator and runs tests/mint-controller.ts
+anchor test -- --features localnet   # spins up a local validator and runs tests/mint-controller.ts
 ```
 
 The committed `mint_controller-keypair.json` and `declare_id!()` are placeholders; real devnet
