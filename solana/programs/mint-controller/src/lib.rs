@@ -142,12 +142,16 @@ pub mod mint_controller {
             config.is_initialized = true;
         } else {
             // Reconfigure: defensive minter check; seed already ties them.
-            // `remaining` / `last_consumed` left intact.
             require_keys_eq!(
                 config.minter_public_key,
                 minter,
                 MintControllerError::MinterMismatch
             );
+            // Snapshot available capacity and restart the window so a shorter
+            // interval can't retroactively refresh. Cap at the new limit.
+            let now = Clock::get()?.unix_timestamp;
+            config.remaining = current_capacity(config, now)?.min(limit);
+            config.last_consumed = now;
         }
 
         config.limit = limit;

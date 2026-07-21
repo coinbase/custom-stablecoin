@@ -348,20 +348,22 @@ describe("mint-controller", () => {
       expect(cfg.remaining.toString()).to.equal("1000000");
     });
 
-    it("second call updates limit and interval but preserves remaining and last_consumed", async () => {
+    it("second call updates limit/interval, snapshots capacity, and resets last_consumed", async () => {
       const { mint, rateLimitAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
 
       await configureMinter(mint, rateLimitAuthority, minter, 1_000_000, 86_400);
       const before = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
 
+      // Reconfigure lower: remaining re-snapshotted + capped at new limit,
+      // last_consumed advanced to now.
       await configureMinter(mint, rateLimitAuthority, minter, 500_000, 3600);
       const after = await program.account.mintRateLimitConfig.fetch(configPda(mint, minter));
 
       expect(after.limit.toString()).to.equal("500000");
       expect(after.interval.toString()).to.equal("3600");
-      expect(after.remaining.toString()).to.equal(before.remaining.toString());
-      expect(after.lastConsumed.toString()).to.equal(before.lastConsumed.toString());
+      expect(after.remaining.toString()).to.equal("500000");
+      expect(after.lastConsumed.toNumber()).to.be.gte(before.lastConsumed.toNumber());
     });
 
     it("rejects from non-rate_limit_authority", async () => {
