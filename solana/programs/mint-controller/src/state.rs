@@ -29,11 +29,12 @@ pub struct GlobalConfig {
 #[account]
 #[derive(InitSpace)]
 pub struct MintRoles {
-    /// Cold key (SCM) that can rotate role authorities, manage recipient
-    /// allowlists, and revoke minters.
+    /// Cold key (SCM) that can rotate role authorities and revoke minters.
     pub admin: Pubkey,
     /// Cold key (SCM) that can configure / reconfigure rate limits for minters.
     pub rate_limit_authority: Pubkey,
+    /// Cold key (SCM) that can add / remove recipients on minter allowlists.
+    pub allowlist_authority: Pubkey,
     pub bump: u8,
 }
 
@@ -69,8 +70,8 @@ pub struct MintRateLimitConfig {
     pub bump: u8,
 }
 
-/// Per-(mint, minter) allowlist PDA. Lazily created on the first
-/// `add_allowed_mint_recipient` call (see the instruction's `init_if_needed` constraint).
+/// Per-(mint, minter) allowlist PDA. Created together with the rate-limit
+/// config when the minter is configured, and closed when the minter is revoked.
 ///
 /// Held intentionally separate from `MintRateLimitConfig` so the account size
 /// can grow independently if `MAX_ALLOWLIST_LEN` is raised later.

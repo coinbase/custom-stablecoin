@@ -54,6 +54,7 @@ pub mod mint_controller {
         ctx: Context<Initialize>,
         admin: Pubkey,
         rate_limit_authority: Pubkey,
+        allowlist_authority: Pubkey,
     ) -> Result<()> {
         require_keys_eq!(
             ctx.accounts.global_config.admin,
@@ -64,6 +65,11 @@ pub mod mint_controller {
         require_keys_neq!(admin, Pubkey::default(), MintControllerError::InvalidAddress);
         require_keys_neq!(
             rate_limit_authority,
+            Pubkey::default(),
+            MintControllerError::InvalidAddress
+        );
+        require_keys_neq!(
+            allowlist_authority,
             Pubkey::default(),
             MintControllerError::InvalidAddress
         );
@@ -78,13 +84,15 @@ pub mod mint_controller {
         let roles = &mut ctx.accounts.roles;
         roles.admin = admin;
         roles.rate_limit_authority = rate_limit_authority;
+        roles.allowlist_authority = allowlist_authority;
         roles.bump = ctx.bumps.roles;
 
         msg!(
-            "Initialized mint_controller for mint {}: admin={}, rate_limit_authority={}",
+            "Initialized mint_controller for mint {}: admin={}, rate_limit_authority={}, allowlist_authority={}",
             ctx.accounts.mint.key(),
             admin,
             rate_limit_authority,
+            allowlist_authority,
         );
         Ok(())
     }
@@ -116,7 +124,27 @@ pub mod mint_controller {
         Ok(())
     }
 
-    /// Configure (or re-configure) `minter`'s rate limit for `mint`.
+    pub fn update_allowlist_authority(
+        ctx: Context<UpdateAllowlistAuthority>,
+        new_allowlist_authority: Pubkey,
+    ) -> Result<()> {
+        require_keys_neq!(
+            new_allowlist_authority,
+            Pubkey::default(),
+            MintControllerError::InvalidAddress
+        );
+        let mint_key = ctx.accounts.mint.key();
+        ctx.accounts.roles.allowlist_authority = new_allowlist_authority;
+        msg!(
+            "update_allowlist_authority mint={} new_allowlist_authority={}",
+            mint_key,
+            new_allowlist_authority
+        );
+        Ok(())
+    }
+
+    /// Configure (or re-configure) `minter`'s rate limit for `mint`. The first
+    /// call also creates the (initially empty) allowlist PDA for the minter.
     pub fn configure_minter(
         ctx: Context<ConfigureMinter>,
         minter: Pubkey,
@@ -157,6 +185,9 @@ pub mod mint_controller {
         config.limit = limit;
         config.interval = interval;
 
+        // Allowlist PDA is created via `init_if_needed`; stamp its canonical bump.
+        ctx.accounts.allowlist.bump = ctx.bumps.allowlist;
+
         msg!(
             "configure_minter mint={} minter={} limit={} interval={}s",
             ctx.accounts.mint.key(),
@@ -167,13 +198,9 @@ pub mod mint_controller {
         Ok(())
     }
 
-    /// Revoke `MINT_ROLE` from `minter` for `mint` by closing the config PDA
-    /// and, if present, the allowlist PDA.
+    /// Revoke `MINT_ROLE` from `minter` for `mint` by closing both the config
+    /// and allowlist PDAs (rent returned to `admin`).
     pub fn revoke_minter(ctx: Context<RevokeMinter>, minter: Pubkey) -> Result<()> {
-        if let Some(allowlist) = ctx.accounts.allowlist.as_ref() {
-            allowlist.close(ctx.accounts.admin.to_account_info())?;
-        }
-
         msg!(
             "revoke_minter mint={} minter={}",
             ctx.accounts.mint.key(),
@@ -190,9 +217,7 @@ pub mod mint_controller {
     ) -> Result<()> {
         require_keys_neq!(recipient, Pubkey::default(), MintControllerError::InvalidAddress);
 
-        let bump = ctx.bumps.allowlist;
         let allowlist = &mut ctx.accounts.allowlist;
-        allowlist.bump = bump;
         require!(
             !allowlist.addresses.contains(&recipient),
             MintControllerError::AddressAlreadyAllowlisted
@@ -398,6 +423,21 @@ pub struct UpdateRateLimitAuthority<'info> {
 }
 
 #[derive(Accounts)]
+pub struct UpdateAllowlistAuthority<'info> {
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
+        bump = roles.bump,
+        has_one = admin @ MintControllerError::Unauthorized,
+    )]
+    pub roles: Account<'info, MintRoles>,
+
+    pub admin: Signer<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(minter: Pubkey)]
 pub struct ConfigureMinter<'info> {
     pub mint: Account<'info, Mint>,
@@ -417,6 +457,17 @@ pub struct ConfigureMinter<'info> {
         bump,
     )]
     pub config: Account<'info, MintRateLimitConfig>,
+
+    /// Allowlist PDA created alongside the rate-limit config so it always exists
+    /// for the lifetime of the minter and is always closed on revoke.
+    #[account(
+        init_if_needed,
+        payer = rate_limit_authority,
+        space = 8 + MintAllowlistConfig::INIT_SPACE,
+        seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
+        bump,
+    )]
+    pub allowlist: Account<'info, MintAllowlistConfig>,
 
     #[account(mut)]
     pub rate_limit_authority: Signer<'info>,
@@ -449,13 +500,14 @@ pub struct RevokeMinter<'info> {
     )]
     pub config: Account<'info, MintRateLimitConfig>,
 
-    /// Pass `null` when no allowlist PDA was ever created for this minter.
+    /// Always exists (created in `configure_minter`); closed here, rent to `admin`.
     #[account(
         mut,
+        close = admin,
         seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
-        bump,
+        bump = allowlist.bump,
     )]
-    pub allowlist: Option<Account<'info, MintAllowlistConfig>>,
+    pub allowlist: Account<'info, MintAllowlistConfig>,
 
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -469,34 +521,7 @@ pub struct AddAllowedMintRecipient<'info> {
     #[account(
         seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
         bump = roles.bump,
-        has_one = admin @ MintControllerError::Unauthorized,
-    )]
-    pub roles: Account<'info, MintRoles>,
-
-    #[account(
-        init_if_needed,
-        payer = admin,
-        space = 8 + MintAllowlistConfig::INIT_SPACE,
-        seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
-        bump,
-    )]
-    pub allowlist: Account<'info, MintAllowlistConfig>,
-
-    #[account(mut)]
-    pub admin: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(minter: Pubkey)]
-pub struct RemoveAllowedMintRecipient<'info> {
-    pub mint: Account<'info, Mint>,
-
-    #[account(
-        seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
-        bump = roles.bump,
-        has_one = admin @ MintControllerError::Unauthorized,
+        has_one = allowlist_authority @ MintControllerError::Unauthorized,
     )]
     pub roles: Account<'info, MintRoles>,
 
@@ -507,7 +532,29 @@ pub struct RemoveAllowedMintRecipient<'info> {
     )]
     pub allowlist: Account<'info, MintAllowlistConfig>,
 
-    pub admin: Signer<'info>,
+    pub allowlist_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(minter: Pubkey)]
+pub struct RemoveAllowedMintRecipient<'info> {
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        seeds = [MINT_ROLES_SEED, mint.key().as_ref()],
+        bump = roles.bump,
+        has_one = allowlist_authority @ MintControllerError::Unauthorized,
+    )]
+    pub roles: Account<'info, MintRoles>,
+
+    #[account(
+        mut,
+        seeds = [MINT_ALLOWLIST_CONFIG_SEED, mint.key().as_ref(), minter.as_ref()],
+        bump = allowlist.bump,
+    )]
+    pub allowlist: Account<'info, MintAllowlistConfig>,
+
+    pub allowlist_authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
