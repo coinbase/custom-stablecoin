@@ -399,6 +399,116 @@ describe("mint-controller", () => {
     });
   });
 
+  describe("input validation (zero-address checks)", () => {
+    it("initialize rejects a zero admin or rate_limit_authority", async () => {
+      const mint = await createMint(
+        provider.connection,
+        payer.payer,
+        payer.publicKey,
+        null,
+        6,
+      );
+      await setAuthority(
+        provider.connection,
+        payer.payer,
+        mint,
+        payer.publicKey,
+        AuthorityType.MintTokens,
+        mintAuthorityPda(mint),
+      );
+      const good = Keypair.generate().publicKey;
+
+      for (const [admin, rla] of [
+        [PublicKey.default, good],
+        [good, PublicKey.default],
+      ] as const) {
+        try {
+          await program.methods
+            .initialize(admin, rla)
+            .accounts({
+              mint,
+              payer: payer.publicKey,
+              globalAdmin: globalAdmin.publicKey,
+            } as any)
+            .signers([globalAdmin])
+            .rpc();
+          assert.fail("expected InvalidAddress");
+        } catch (err: any) {
+          expect(err.toString()).to.contain("InvalidAddress");
+        }
+      }
+    });
+
+    it("configure_minter rejects the zero minter", async () => {
+      const { mint, rateLimitAuthority } = await setupMintAndInitialize();
+      try {
+        await configureMinter(
+          mint,
+          rateLimitAuthority,
+          PublicKey.default,
+          1_000_000,
+          86_400,
+        );
+        assert.fail("expected InvalidAddress for zero minter");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("InvalidAddress");
+      }
+    });
+
+    it("update_admin rejects the zero address", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
+      try {
+        await program.methods
+          .updateAdmin(PublicKey.default)
+          .accounts({ mint, admin: admin.publicKey } as any)
+          .signers([admin])
+          .rpc();
+        assert.fail("expected InvalidAddress");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("InvalidAddress");
+      }
+    });
+
+    it("update_rate_limit_authority rejects the zero address", async () => {
+      const { mint, admin } = await setupMintAndInitialize();
+      try {
+        await program.methods
+          .updateRateLimitAuthority(PublicKey.default)
+          .accounts({ mint, admin: admin.publicKey } as any)
+          .signers([admin])
+          .rpc();
+        assert.fail("expected InvalidAddress");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("InvalidAddress");
+      }
+    });
+
+    it("update_global_admin rejects the zero address", async () => {
+      try {
+        await program.methods
+          .updateGlobalAdmin(PublicKey.default)
+          .accounts({ admin: globalAdmin.publicKey } as any)
+          .signers([globalAdmin])
+          .rpc();
+        assert.fail("expected InvalidAddress");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("InvalidAddress");
+      }
+    });
+
+    it("add_allowed_mint_recipient rejects the zero recipient", async () => {
+      const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();
+      const minter = Keypair.generate().publicKey;
+      await configureMinter(mint, rateLimitAuthority, minter, 1_000_000, 86_400);
+      try {
+        await addAllowedMintRecipient(mint, admin, minter, PublicKey.default);
+        assert.fail("expected InvalidAddress");
+      } catch (err: any) {
+        expect(err.toString()).to.contain("InvalidAddress");
+      }
+    });
+  });
+
   describe("revoke_minter", () => {
     it("admin closes the config PDA and reclaims rent", async () => {
       const { mint, admin, rateLimitAuthority } = await setupMintAndInitialize();

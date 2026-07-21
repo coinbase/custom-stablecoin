@@ -40,6 +40,7 @@ pub mod mint_controller {
     }
 
     pub fn update_global_admin(ctx: Context<UpdateGlobalAdmin>, new_admin: Pubkey) -> Result<()> {
+        require_keys_neq!(new_admin, Pubkey::default(), MintControllerError::InvalidAddress);
         ctx.accounts.global_config.admin = new_admin;
         msg!("update_global_admin new_admin={}", new_admin);
         Ok(())
@@ -58,6 +59,13 @@ pub mod mint_controller {
             ctx.accounts.global_config.admin,
             ctx.accounts.global_admin.key(),
             MintControllerError::Unauthorized
+        );
+
+        require_keys_neq!(admin, Pubkey::default(), MintControllerError::InvalidAddress);
+        require_keys_neq!(
+            rate_limit_authority,
+            Pubkey::default(),
+            MintControllerError::InvalidAddress
         );
 
         // Done in the handler rather than as an account constraint to keep the
@@ -82,6 +90,7 @@ pub mod mint_controller {
     }
 
     pub fn update_admin(ctx: Context<UpdateAdmin>, new_admin: Pubkey) -> Result<()> {
+        require_keys_neq!(new_admin, Pubkey::default(), MintControllerError::InvalidAddress);
         let mint_key = ctx.accounts.mint.key();
         ctx.accounts.roles.admin = new_admin;
         msg!("update_admin mint={} new_admin={}", mint_key, new_admin);
@@ -92,6 +101,11 @@ pub mod mint_controller {
         ctx: Context<UpdateRateLimitAuthority>,
         new_rate_limit_authority: Pubkey,
     ) -> Result<()> {
+        require_keys_neq!(
+            new_rate_limit_authority,
+            Pubkey::default(),
+            MintControllerError::InvalidAddress
+        );
         let mint_key = ctx.accounts.mint.key();
         ctx.accounts.roles.rate_limit_authority = new_rate_limit_authority;
         msg!(
@@ -113,19 +127,27 @@ pub mod mint_controller {
             limit > 0 && interval > 0,
             MintControllerError::InvalidConfig
         );
+        require_keys_neq!(minter, Pubkey::default(), MintControllerError::InvalidAddress);
 
         let bump = ctx.bumps.config;
         let config = &mut ctx.accounts.config;
 
-        // Fresh init. Reconfigure leaves `remaining` and `last_consumed` intact
-        // so an in-flight rate-limit window survives.
         if !config.is_initialized {
+            // Fresh init.
             let now = Clock::get()?.unix_timestamp;
             config.minter_public_key = minter;
             config.remaining = limit;
             config.last_consumed = now;
             config.bump = bump;
             config.is_initialized = true;
+        } else {
+            // Reconfigure: defensive minter check; seed already ties them.
+            // `remaining` / `last_consumed` left intact.
+            require_keys_eq!(
+                config.minter_public_key,
+                minter,
+                MintControllerError::MinterMismatch
+            );
         }
 
         config.limit = limit;
@@ -162,6 +184,8 @@ pub mod mint_controller {
         minter: Pubkey,
         recipient: Pubkey,
     ) -> Result<()> {
+        require_keys_neq!(recipient, Pubkey::default(), MintControllerError::InvalidAddress);
+
         let bump = ctx.bumps.allowlist;
         let allowlist = &mut ctx.accounts.allowlist;
         allowlist.bump = bump;

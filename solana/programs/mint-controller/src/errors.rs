@@ -26,4 +26,6 @@ pub enum MintControllerError {
     InvalidAmount,
     #[msg("All minting is paused")]
     MintingPaused,
+    #[msg("Address must not be the zero/default pubkey")]
+    InvalidAddress,
 }
