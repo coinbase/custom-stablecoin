@@ -285,7 +285,7 @@ describe("mint-controller", () => {
 
   describe("update_<role> instructions", () => {
     it("rejects each updater when the wrong signer calls it", async () => {
-      const { mint, admin, rateLimitAuthority } =
+      const { mint, admin, rateLimitAuthority, allowlistAuthority } =
         await setupMintAndInitialize();
       const stranger = await fundedKeypair();
       const newKey = Keypair.generate().publicKey;
@@ -311,6 +311,18 @@ describe("mint-controller", () => {
           .signers([rateLimitAuthority])
           .rpc();
         assert.fail("update_rate_limit_authority should require admin signer");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
+      }
+
+      // update_allowlist_authority called by allowlist_authority (not admin) should fail.
+      try {
+        await program.methods
+          .updateAllowlistAuthority(newKey)
+          .accounts({ mint, admin: allowlistAuthority.publicKey } as any)
+          .signers([allowlistAuthority])
+          .rpc();
+        assert.fail("update_allowlist_authority should require admin signer");
       } catch (err: any) {
         expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
       }

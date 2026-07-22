@@ -210,6 +210,9 @@ pub mod mint_controller {
     }
 
     /// Add `recipient` to `minter`'s recipient allowlist for `mint`.
+    ///
+    /// `recipient` is the token account *owner*; that the destination is a real
+    /// token account for this mint is enforced at mint time in `MintTokens`.
     pub fn add_allowed_mint_recipient(
         ctx: Context<AddAllowedMintRecipient>,
         minter: Pubkey,
@@ -597,7 +600,8 @@ pub struct MintTokens<'info> {
     #[account(seeds = [MINT_AUTHORITY_SEED, mint.key().as_ref()], bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
-    /// Destination token account. The allowlist is checked against its owner.
+    /// Destination token account (typed + `token::mint = mint`); the allowlist
+    /// is checked against its `owner`.
     #[account(mut, token::mint = mint)]
     pub recipient_token_account: Account<'info, TokenAccount>,
 

@@ -1,6 +1,7 @@
 {
   "license": "Apache-2.0",
   "scripts": {
+    "test": "anchor test -- --features localnet",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
