@@ -9,7 +9,9 @@ crate-type = ["cdylib", "lib"]
 name = "mint_controller"
 
 [features]
-default = []
+# Default-on so a release build can't ship the on-chain IDL instructions.
+# Independent of `idl-build`; `anchor build` still emits the client IDL.
+default = ["no-idl"]
 localnet = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
