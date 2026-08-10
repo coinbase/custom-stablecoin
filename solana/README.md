@@ -55,6 +55,13 @@ All PDAs live under this program's ID; seeds are constants in
 | `MintRateLimitConfig` | `[b"mint_rate_limit_config", mint, minter]` | Per-(mint, minter) rate-limit state. Existence == `MINT_ROLE` granted. |
 | `MintAllowlistConfig` | `[b"mint_allowlist_config", mint, minter]` | Per-(mint, minter) allowlist (capped at `MAX_ALLOWLIST_LEN = 100`). |
 
+### Rent
+
+`rate_limit_authority` pays the rent for both minter PDAs, about 0.0247 SOL each time, and
+`revoke_minter` returns it to `admin`. So rent moves between the two keys on every
+grant/revoke cycle, and the refund goes to whoever holds the admin role at close time, not
+to the original payer. Fund both keys.
+
 ## Operational pre-flight
 
 Configure everything first, then hand the mint authority over last. The handoff is
