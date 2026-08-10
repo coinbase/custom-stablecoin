@@ -16,7 +16,7 @@ import {
   AuthorityType,
   getAccount,
 } from "@solana/spl-token";
-import { assert, expect } from "chai";
+import { expect } from "chai";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -206,6 +206,33 @@ describe("mint-controller", () => {
       .rpc();
   }
 
+  /**
+   * Assert that `fn` rejects with a given Anchor error code.
+   *
+   * The failure for an unexpected resolve is thrown outside the catch, so a
+   * test can't be satisfied by its own assertion error.
+   */
+  async function expectAnchorError(
+    fn: () => Promise<unknown>,
+    code: string,
+  ): Promise<void> {
+    let caught: unknown;
+    let resolved = false;
+    try {
+      await fn();
+      resolved = true;
+    } catch (err) {
+      caught = err;
+    }
+    if (resolved) {
+      throw new Error(`expected ${code}, but the instruction succeeded`);
+    }
+    expect(
+      (caught as any)?.error?.errorCode?.code,
+      `expected ${code}, got: ${caught}`,
+    ).to.equal(code);
+  }
+
   // Tests -----------------------------------------------------------------
 
   describe("initialize", () => {
@@ -230,7 +257,7 @@ describe("mint-controller", () => {
         6,
       );
       const admin = Keypair.generate();
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .initialize(admin.publicKey, admin.publicKey, admin.publicKey)
           .accounts({
@@ -240,10 +267,7 @@ describe("mint-controller", () => {
           } as any)
           .signers([globalAdmin])
           .rpc();
-        assert.fail("expected InvalidMintAuthority");
-      } catch (err: any) {
-        expect(err.error?.errorCode?.code ?? err.toString()).to.contain("InvalidMintAuthority");
-      }
+      }, "InvalidMintAuthority");
     });
 
     it("rejects when the caller is not the global admin", async () => {
@@ -266,7 +290,7 @@ describe("mint-controller", () => {
 
       const attacker = await fundedKeypair();
       const admin = Keypair.generate();
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .initialize(admin.publicKey, admin.publicKey, admin.publicKey)
           .accounts({
@@ -276,10 +300,7 @@ describe("mint-controller", () => {
           } as any)
           .signers([attacker])
           .rpc();
-        assert.fail("expected Unauthorized");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/Unauthorized|ConstraintHasOne/);
-      }
+      }, "Unauthorized");
     });
   });
 
@@ -291,41 +312,31 @@ describe("mint-controller", () => {
       const newKey = Keypair.generate().publicKey;
 
       // update_admin
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateAdmin(newKey)
           .accounts({ mint, admin: stranger.publicKey } as any)
           .signers([stranger])
           .rpc();
-        assert.fail("update_admin should require admin signer");
-      } catch (err: any) {
-        // has_one mismatch surfaces as ConstraintHasOne, not Unauthorized.
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
 
       // update_rate_limit_authority called by rate_limit_authority (not admin) should fail.
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateRateLimitAuthority(newKey)
           .accounts({ mint, admin: rateLimitAuthority.publicKey } as any)
           .signers([rateLimitAuthority])
           .rpc();
-        assert.fail("update_rate_limit_authority should require admin signer");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
 
       // update_allowlist_authority called by allowlist_authority (not admin) should fail.
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateAllowlistAuthority(newKey)
           .accounts({ mint, admin: allowlistAuthority.publicKey } as any)
           .signers([allowlistAuthority])
           .rpc();
-        assert.fail("update_allowlist_authority should require admin signer");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
     });
 
     it("admin can rotate each role", async () => {
@@ -398,16 +409,13 @@ describe("mint-controller", () => {
       const stranger = await fundedKeypair();
       const minter = Keypair.generate().publicKey;
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .configureMinter(minter, new BN(1), new BN(1))
           .accounts({ mint, rateLimitAuthority: stranger.publicKey } as any)
           .signers([stranger])
           .rpc();
-        assert.fail("expected ConstraintHasOne");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
     });
 
     it("rejects when limit or interval is zero", async () => {
@@ -418,12 +426,9 @@ describe("mint-controller", () => {
         [0, 100],
         [100, 0],
       ] as const) {
-        try {
+        await expectAnchorError(async () => {
           await configureMinter(mint, rateLimitAuthority, minter, limit, interval);
-          assert.fail(`expected InvalidConfig for limit=${limit} interval=${interval}`);
-        } catch (err: any) {
-          expect(err.toString()).to.contain("InvalidConfig");
-        }
+        }, "InvalidConfig");
       }
     });
   });
@@ -452,7 +457,7 @@ describe("mint-controller", () => {
         [good, PublicKey.default, good],
         [good, good, PublicKey.default],
       ] as const) {
-        try {
+        await expectAnchorError(async () => {
           await program.methods
             .initialize(admin, rla, ala)
             .accounts({
@@ -462,16 +467,13 @@ describe("mint-controller", () => {
             } as any)
             .signers([globalAdmin])
             .rpc();
-          assert.fail("expected InvalidAddress");
-        } catch (err: any) {
-          expect(err.toString()).to.contain("InvalidAddress");
-        }
+        }, "InvalidAddress");
       }
     });
 
     it("configure_minter rejects the zero minter", async () => {
       const { mint, rateLimitAuthority } = await setupMintAndInitialize();
-      try {
+      await expectAnchorError(async () => {
         await configureMinter(
           mint,
           rateLimitAuthority,
@@ -479,63 +481,48 @@ describe("mint-controller", () => {
           1_000_000,
           86_400,
         );
-        assert.fail("expected InvalidAddress for zero minter");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("InvalidAddress");
-      }
+      }, "InvalidAddress");
     });
 
     it("update_admin rejects the zero address", async () => {
       const { mint, admin } = await setupMintAndInitialize();
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateAdmin(PublicKey.default)
           .accounts({ mint, admin: admin.publicKey } as any)
           .signers([admin])
           .rpc();
-        assert.fail("expected InvalidAddress");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("InvalidAddress");
-      }
+      }, "InvalidAddress");
     });
 
     it("update_rate_limit_authority rejects the zero address", async () => {
       const { mint, admin } = await setupMintAndInitialize();
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateRateLimitAuthority(PublicKey.default)
           .accounts({ mint, admin: admin.publicKey } as any)
           .signers([admin])
           .rpc();
-        assert.fail("expected InvalidAddress");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("InvalidAddress");
-      }
+      }, "InvalidAddress");
     });
 
     it("update_global_admin rejects the zero address", async () => {
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .updateGlobalAdmin(PublicKey.default)
           .accounts({ admin: globalAdmin.publicKey } as any)
           .signers([globalAdmin])
           .rpc();
-        assert.fail("expected InvalidAddress");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("InvalidAddress");
-      }
+      }, "InvalidAddress");
     });
 
     it("add_allowed_mint_recipient rejects the zero recipient", async () => {
       const { mint, admin, rateLimitAuthority, allowlistAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       await configureMinter(mint, rateLimitAuthority, minter, 1_000_000, 86_400);
-      try {
+      await expectAnchorError(async () => {
         await addAllowedMintRecipient(mint, allowlistAuthority, minter, PublicKey.default);
-        assert.fail("expected InvalidAddress");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("InvalidAddress");
-      }
+      }, "InvalidAddress");
     });
   });
 
@@ -592,7 +579,7 @@ describe("mint-controller", () => {
       const minter = Keypair.generate().publicKey;
       await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .revokeMinter(minter)
           .accounts({
@@ -602,10 +589,7 @@ describe("mint-controller", () => {
           } as any)
           .signers([rateLimitAuthority])
           .rpc();
-        assert.fail("expected ConstraintHasOne");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
     });
   });
 
@@ -629,7 +613,7 @@ describe("mint-controller", () => {
         .signers([globalAdmin])
         .rpc();
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -639,10 +623,7 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected MintingPaused");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("MintingPaused");
-      }
+      }, "MintingPaused");
 
       await program.methods
         .setPaused(false)
@@ -666,16 +647,13 @@ describe("mint-controller", () => {
 
     it("rejects set_paused from non-admin", async () => {
       const stranger = await fundedKeypair();
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .setPaused(true)
           .accounts({ admin: stranger.publicKey } as any)
           .signers([stranger])
           .rpc();
-        assert.fail("expected ConstraintHasOne");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/ConstraintHasOne|Unauthorized/);
-      }
+      }, "Unauthorized");
     });
 
     it("global admin can rotate via update_global_admin", async () => {
@@ -722,27 +700,21 @@ describe("mint-controller", () => {
       const addr = Keypair.generate().publicKey;
       await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
       await addAllowedMintRecipient(mint, allowlistAuthority, minter, addr);
-      try {
+      await expectAnchorError(async () => {
         await addAllowedMintRecipient(mint, allowlistAuthority, minter, addr);
-        assert.fail("expected AddressAlreadyAllowlisted");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("AddressAlreadyAllowlisted");
-      }
+      }, "AddressAlreadyAllowlisted");
     });
 
     it("remove errors when the minter has no allowlist (not configured)", async () => {
       const { mint, allowlistAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .removeAllowedMintRecipient(minter, Keypair.generate().publicKey)
           .accounts({ mint, allowlistAuthority: allowlistAuthority.publicKey } as any)
           .signers([allowlistAuthority])
           .rpc();
-        assert.fail("expected AccountNotInitialized");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/AccountNotInitialized|3012/);
-      }
+      }, "AccountNotInitialized");
     });
 
     it("remove_allowed_mint_recipient removes an existing entry", async () => {
@@ -774,16 +746,13 @@ describe("mint-controller", () => {
       await configureMinter(mint, rateLimitAuthority, minter, 1_000, 60);
       await addAllowedMintRecipient(mint, allowlistAuthority, minter, a);
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .removeAllowedMintRecipient(minter, Keypair.generate().publicKey)
           .accounts({ mint, allowlistAuthority: allowlistAuthority.publicKey } as any)
           .signers([allowlistAuthority])
           .rpc();
-        assert.fail("expected AddressNotAllowlisted");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("AddressNotAllowlisted");
-      }
+      }, "AddressNotAllowlisted");
     });
   });
 
@@ -834,7 +803,7 @@ describe("mint-controller", () => {
       await configureMinter(mint, rateLimitAuthority, minter.publicKey, 100, 86_400);
       await addAllowedMintRecipient(mint, allowlistAuthority, minter.publicKey, recipient.publicKey);
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(101))
           .accounts({
@@ -844,10 +813,14 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected LimitExceeded");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("LimitExceeded");
-      }
+      }, "LimitExceeded");
+
+      const acct = await getAccount(provider.connection, recipientAta);
+      expect(acct.amount.toString()).to.equal("0");
+      const cfg = await program.account.mintRateLimitConfig.fetch(
+        configPda(mint, minter.publicKey),
+      );
+      expect(cfg.remaining.toString()).to.equal("100");
     });
 
     it("rejects when recipient is not on the allowlist", async () => {
@@ -865,7 +838,7 @@ describe("mint-controller", () => {
       // Allowlist *exists* (so account loads succeed) but only contains `allowed`.
       await addAllowedMintRecipient(mint, allowlistAuthority, minter.publicKey, allowed.publicKey);
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -875,10 +848,14 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected RecipientNotAllowlisted");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("RecipientNotAllowlisted");
-      }
+      }, "RecipientNotAllowlisted");
+
+      const acct = await getAccount(provider.connection, notAllowedAta);
+      expect(acct.amount.toString()).to.equal("0");
+      const cfg = await program.account.mintRateLimitConfig.fetch(
+        configPda(mint, minter.publicKey),
+      );
+      expect(cfg.remaining.toString()).to.equal("1000");
     });
 
     it("two minters of the same mint have independent capacity and allowlists", async () => {
@@ -928,7 +905,7 @@ describe("mint-controller", () => {
         .rpc();
 
       // Recipient A's allowlist for minter A does NOT authorize minter B to mint to A.
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -938,10 +915,15 @@ describe("mint-controller", () => {
           } as any)
           .signers([minterB])
           .rpc();
-        assert.fail("expected RecipientNotAllowlisted (cross-minter allowlist)");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("RecipientNotAllowlisted");
-      }
+      }, "RecipientNotAllowlisted");
+
+      // A's balance is untouched by B's failed mint, and B's capacity is not spent.
+      const acctA = await getAccount(provider.connection, ataA);
+      expect(acctA.amount.toString()).to.equal("1000");
+      const cfgB = await program.account.mintRateLimitConfig.fetch(
+        configPda(mint, minterB.publicKey),
+      );
+      expect(cfgB.remaining.toString()).to.equal("0");
     });
 
     it("rejects when destination token account owner is not allowlisted", async () => {
@@ -959,7 +941,7 @@ describe("mint-controller", () => {
       await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
       await addAllowedMintRecipient(mint, allowlistAuthority, minter.publicKey, allowlistedOwner.publicKey);
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -969,10 +951,14 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected RecipientNotAllowlisted");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("RecipientNotAllowlisted");
-      }
+      }, "RecipientNotAllowlisted");
+
+      const acct = await getAccount(provider.connection, wrongAta);
+      expect(acct.amount.toString()).to.equal("0");
+      const cfg = await program.account.mintRateLimitConfig.fetch(
+        configPda(mint, minter.publicKey),
+      );
+      expect(cfg.remaining.toString()).to.equal("1000");
     });
 
     it("succeeds when minter holds zero SOL (fee payer is implicit)", async () => {
@@ -1035,7 +1021,7 @@ describe("mint-controller", () => {
         .rpc();
 
       // Immediate retry of even 1 unit should fail.
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -1045,10 +1031,7 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected LimitExceeded immediately after drain");
-      } catch (err: any) {
-        expect(err.toString()).to.contain("LimitExceeded");
-      }
+      }, "LimitExceeded");
 
       // Sleep ~3s; expect ~300 to have replenished. Mint 200 (well within).
       await new Promise((r) => setTimeout(r, 3500));
@@ -1090,7 +1073,7 @@ describe("mint-controller", () => {
         .signers([admin])
         .rpc();
 
-      try {
+      await expectAnchorError(async () => {
         await program.methods
           .mintTokens(new BN(1))
           .accounts({
@@ -1100,10 +1083,13 @@ describe("mint-controller", () => {
           } as any)
           .signers([minter])
           .rpc();
-        assert.fail("expected AccountNotInitialized after revoke");
-      } catch (err: any) {
-        expect(err.toString()).to.match(/AccountNotInitialized|3012/);
-      }
+      }, "AccountNotInitialized");
+
+      const acct = await getAccount(provider.connection, ata);
+      expect(acct.amount.toString()).to.equal("0");
+      expect(
+        await provider.connection.getAccountInfo(configPda(mint, minter.publicKey)),
+      ).to.equal(null);
     });
   });
 });
