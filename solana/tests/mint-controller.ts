@@ -623,7 +623,7 @@ describe("mint-controller", () => {
       expect(acct).to.equal(null);
     });
 
-    it("also closes the allowlist PDA when one exists", async () => {
+    it("also closes the allowlist PDA", async () => {
       const { mint, admin, rateLimitAuthority, allowlistAuthority } = await setupMintAndInitialize();
       const minter = Keypair.generate().publicKey;
       const recipient = Keypair.generate().publicKey;
