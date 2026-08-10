@@ -55,29 +55,49 @@ All PDAs live under this program's ID; seeds are constants in
 
 ## Operational pre-flight
 
-**Deploy ordering (run immediately after deploy to avoid frontruns):**
+Configure everything first, then hand the mint authority over last. The handoff is
+irreversible: only the current authority can sign `SetAuthority`, and this program
+exposes no way to give it back. Anything that goes wrong before the handoff leaves
+the mint recoverable by its original authority.
 
-1. `initialize_global()` — creates the program-wide pause singleton (one-time). The initial global admin is hardcoded in `INITIAL_GLOBAL_ADMIN` (`constants.rs`); set this to the real cold (SCM) key before mainnet deploy.
-2. For each stablecoin mint: transfer SPL mint authority to the program PDA, then `initialize(admin, rate_limit_authority)` signed by the global admin.
+**Once per deployment**
 
-Before calling `initialize` for a new mint, the *current* SPL mint authority must hand the
-authority over to the program's `mint_authority` PDA (the program cannot do this itself —
-only the current authority can sign `SetAuthority`). The PDA address is deterministic:
+1. Deploy, then check the deployed address matches `declare_id!` and record the binary hash.
+2. `initialize_global()` — creates the program-wide pause singleton. It is permissionless
+   and pins `admin` to the compiled-in `INITIAL_GLOBAL_ADMIN`, so run it straight after
+   deploy. A non-localnet build fails to compile while that constant is the placeholder.
+3. Prove the global admin can sign, by sending `set_paused(false)` as a no-op.
 
-```
-mint_authority_pda = findProgramAddressSync(
-  [b"mint_authority", mint],
-  programId,
-)
-```
+**Per stablecoin mint**
 
-Then:
+1. `initialize(admin, rate_limit_authority, allowlist_authority)`, signed by the global admin.
+   The mint must be owned by the classic SPL Token program; Token-2022 is not supported.
+2. `configure_minter(minter, limit, interval)` for each minter.
+3. `add_allowed_mint_recipient(minter, recipient)` for each recipient. The program checks the
+   token account's **owner**, so allowlist the wallet address, not its associated token account.
+4. Simulate `[SetAuthority, mint_tokens(1)]` as one transaction with `sigVerify: false`. A
+   misconfigured controller fails the simulation and names the failing instruction.
+5. Hand the authority over. Derive the PDA from the deployed program ID:
 
-```bash
-spl-token authorize <MINT_ADDRESS> mint <MINT_AUTHORITY_PDA>
-```
+   ```
+   mint_authority_pda = findProgramAddressSync([b"mint_authority", mint], programId)
+   ```
 
-After that, only the global admin may call `initialize(admin, rate_limit_authority)`.
+   ```bash
+   spl-token authorize <MINT_ADDRESS> mint <MINT_AUTHORITY_PDA>
+   ```
+
+6. Mint a small amount through the controller to confirm the path works.
+
+`initialize` no longer requires the PDA to already hold the authority, so steps 1 to 3 run
+while the original key still controls the mint. `mint_tokens` enforces the authority, so
+minting stays disabled until step 5 lands.
+
+**Recovery**
+
+Keep the program upgradeable, with the upgrade authority on a cold key, and do not freeze
+it. Once the authority moves to the PDA, a program upgrade is the only way to change what
+can be done with it.
 
 ## Build / test
 
@@ -86,9 +106,13 @@ After that, only the global admin may call `initialize(admin, rate_limit_authori
 
 cd solana
 yarn install
-anchor build
+anchor build -- --features localnet
 anchor test -- --features localnet   # spins up a local validator and runs tests/mint-controller.ts
 ```
+
+`--features localnet` is required. Without it `INITIAL_GLOBAL_ADMIN` is still the placeholder
+and the build fails on purpose, so a release artifact can't ship an unsignable global admin.
+Drop the flag once the constant holds a real key.
 
 The committed `mint_controller-keypair.json` and `declare_id!()` are placeholders; real devnet
 and mainnet program IDs will be added when the program is first deployed.

@@ -13,6 +13,25 @@ pub const INITIAL_GLOBAL_ADMIN: Pubkey = pubkey!("111111111111111111111111111111
 #[cfg(feature = "localnet")]
 pub const INITIAL_GLOBAL_ADMIN: Pubkey = pubkey!("naX3wmWkWyxxY1mBeva6mPEEegwKuGEXDarn41w6bfP");
 
+// initialize_global is permissionless and GlobalConfig can't be re-initialized,
+// so shipping the placeholder would let anyone pin an unsignable admin.
+#[cfg(not(feature = "localnet"))]
+const _: () = {
+    let bytes = INITIAL_GLOBAL_ADMIN.to_bytes();
+    let mut i = 0;
+    let mut nonzero = false;
+    while i < 32 {
+        if bytes[i] != 0 {
+            nonzero = true;
+        }
+        i += 1;
+    }
+    assert!(
+        nonzero,
+        "set INITIAL_GLOBAL_ADMIN to the real cold key, or build with --features localnet"
+    );
+};
+
 /// Seed for the program-wide singleton PDA: holds the emergency pause flag.
 pub const GLOBAL_CONFIG_SEED: &[u8] = b"global_config";
 

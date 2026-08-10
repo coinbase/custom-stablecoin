@@ -15,6 +15,7 @@ import {
   setAuthority,
   AuthorityType,
   getAccount,
+  getMint,
 } from "@solana/spl-token";
 import { expect } from "chai";
 import * as fs from "fs";
@@ -119,15 +120,28 @@ describe("mint-controller", () => {
     )[0];
   }
 
+  /** Hand the SPL mint authority over to the program's PDA. */
+  async function handoffMintAuthority(mint: PublicKey): Promise<void> {
+    await setAuthority(
+      provider.connection,
+      payer.payer,
+      mint,
+      payer.publicKey,
+      AuthorityType.MintTokens,
+      mintAuthorityPda(mint),
+    );
+  }
+
   /**
-   * Spin up a fresh SPL mint whose mint_authority is the program's
-   * `mint_authority` PDA, then call `initialize`. Returns everything the tests
-   * need to interact with this mint.
+   * Spin up a fresh SPL mint and call `initialize`, in deployment order:
+   * configure first, hand the authority over last. Pass `handoff: false` to
+   * stop before the handoff.
    *
    * Each top-level test gets its own mint so sub-tests are independent.
    */
   async function setupMintAndInitialize(opts?: {
     decimals?: number;
+    handoff?: boolean;
   }): Promise<{
     mint: PublicKey;
     admin: Keypair;
@@ -140,16 +154,6 @@ describe("mint-controller", () => {
       payer.publicKey,
       null,
       opts?.decimals ?? 6,
-    );
-
-    const mintAuth = mintAuthorityPda(mint);
-    await setAuthority(
-      provider.connection,
-      payer.payer,
-      mint,
-      payer.publicKey,
-      AuthorityType.MintTokens,
-      mintAuth,
     );
 
     const admin = await fundedKeypair();
@@ -169,6 +173,10 @@ describe("mint-controller", () => {
       } as any)
       .signers([globalAdmin])
       .rpc();
+
+    if (opts?.handoff !== false) {
+      await handoffMintAuthority(mint);
+    }
 
     return { mint, admin, rateLimitAuthority, allowlistAuthority };
   }
@@ -236,7 +244,7 @@ describe("mint-controller", () => {
   // Tests -----------------------------------------------------------------
 
   describe("initialize", () => {
-    it("creates the per-mint roles PDA when SPL mint authority is the program PDA", async () => {
+    it("creates the per-mint roles PDA", async () => {
       const { mint, admin, rateLimitAuthority } =
         await setupMintAndInitialize();
 
@@ -247,27 +255,14 @@ describe("mint-controller", () => {
       );
     });
 
-    it("rejects when SPL mint authority is not the program PDA", async () => {
-      // Don't transfer mint authority to the PDA — should fail with InvalidMintAuthority.
-      const mint = await createMint(
-        provider.connection,
-        payer.payer,
-        payer.publicKey,
-        null,
-        6,
+    it("succeeds while the mint authority is still the original key", async () => {
+      const { mint } = await setupMintAndInitialize({ handoff: false });
+
+      await program.account.mintRoles.fetch(rolesPda(mint));
+      const info = await getMint(provider.connection, mint);
+      expect(info.mintAuthority?.toBase58()).to.equal(
+        payer.publicKey.toBase58(),
       );
-      const admin = Keypair.generate();
-      await expectAnchorError(async () => {
-        await program.methods
-          .initialize(admin.publicKey, admin.publicKey, admin.publicKey)
-          .accounts({
-            mint,
-            payer: payer.publicKey,
-            globalAdmin: globalAdmin.publicKey,
-          } as any)
-          .signers([globalAdmin])
-          .rpc();
-      }, "InvalidMintAuthority");
     });
 
     it("rejects when the caller is not the global admin", async () => {
@@ -301,6 +296,85 @@ describe("mint-controller", () => {
           .signers([attacker])
           .rpc();
       }, "Unauthorized");
+    });
+  });
+
+  describe("mint authority handoff ordering", () => {
+    it("mint_tokens rejects until the handoff completes, then succeeds", async () => {
+      const { mint, rateLimitAuthority, allowlistAuthority } =
+        await setupMintAndInitialize({ handoff: false });
+      const minter = await fundedKeypair();
+      const recipient = Keypair.generate();
+      const ata = await createAccount(
+        provider.connection,
+        payer.payer,
+        mint,
+        recipient.publicKey,
+      );
+      await configureMinter(mint, rateLimitAuthority, minter.publicKey, 1_000, 60);
+      await addAllowedMintRecipient(
+        mint,
+        allowlistAuthority,
+        minter.publicKey,
+        recipient.publicKey,
+      );
+
+      const mintTokens = () =>
+        program.methods
+          .mintTokens(new BN(100))
+          .accounts({
+            minter: minter.publicKey,
+            mint,
+            recipientTokenAccount: ata,
+          } as any)
+          .signers([minter])
+          .rpc();
+
+      // Fully configured, but the PDA does not hold the authority yet.
+      await expectAnchorError(mintTokens, "InvalidMintAuthority");
+
+      await handoffMintAuthority(mint);
+      await mintTokens();
+
+      const tokenAcct = await getAccount(provider.connection, ata);
+      expect(tokenAcct.amount.toString()).to.equal("100");
+    });
+
+    it("leaves the original mint authority intact when setup fails", async () => {
+      const mint = await createMint(
+        provider.connection,
+        payer.payer,
+        payer.publicKey,
+        null,
+        6,
+      );
+
+      await expectAnchorError(
+        () =>
+          program.methods
+            .initialize(
+              PublicKey.default,
+              Keypair.generate().publicKey,
+              Keypair.generate().publicKey,
+            )
+            .accounts({
+              mint,
+              payer: payer.publicKey,
+              globalAdmin: globalAdmin.publicKey,
+            } as any)
+            .signers([globalAdmin])
+            .rpc(),
+        "InvalidAddress",
+      );
+
+      // The original authority can still recover the mint.
+      const info = await getMint(provider.connection, mint);
+      expect(info.mintAuthority?.toBase58()).to.equal(
+        payer.publicKey.toBase58(),
+      );
+      expect(await provider.connection.getAccountInfo(rolesPda(mint))).to.equal(
+        null,
+      );
     });
   });
 

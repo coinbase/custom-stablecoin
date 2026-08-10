@@ -48,7 +48,8 @@ pub mod mint_controller {
 
     /// Initialize the per-mint role-holder PDA and mint-authority PDA for `mint`.
     ///
-    /// The `init` constraint on `roles` prevents re-initialization. Only the
+    /// Run this before transferring the SPL mint authority to the PDA. The
+    /// `init` constraint on `roles` prevents re-initialization. Only the
     /// global admin may call this instruction.
     pub fn initialize(
         ctx: Context<Initialize>,
@@ -74,12 +75,9 @@ pub mod mint_controller {
             MintControllerError::InvalidAddress
         );
 
-        // Done in the handler rather than as an account constraint to keep the
-        // forward reference (mint -> mint_authority) out of the account struct.
-        require!(
-            ctx.accounts.mint.mint_authority == COption::Some(ctx.accounts.mint_authority.key()),
-            MintControllerError::InvalidMintAuthority
-        );
+        // No check that the PDA already holds the SPL mint authority: setup runs
+        // first so a failure leaves the mint recoverable. `MintTokens` enforces
+        // it, so minting stays disabled until the handoff.
 
         let roles = &mut ctx.accounts.roles;
         roles.admin = admin;
