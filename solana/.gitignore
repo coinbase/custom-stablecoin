@@ -1,0 +1,17 @@
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+.yarn
+.env
+**/*.env
+*.swp
+*.swo
+# Program keypairs are deployment artifacts and are managed out-of-band;
+# the `declare_id!()` in `lib.rs` and `[programs.localnet]` in `Anchor.toml`
+# are the source of truth for the program ID.
+**/deploy/*.json
+**/*-keypair.json
+**/id.json
