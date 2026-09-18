@@ -133,11 +133,12 @@ contract StablecoinE2ETest is StablecoinTest {
         bytes memory initData = abi.encodeCall(StablecoinFactory.initialize, (admin, 0, localDeployer));
         StablecoinFactory localFactory = StablecoinFactory(address(new ERC1967Proxy(address(factoryImpl), initData)));
 
-        // Deploy two stablecoins
+        // Deploy two stablecoins through the factory's legacy path
         vm.prank(localDeployer);
         address addrA = localFactory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, localAdmin, salt1);
         vm.prank(localDeployer);
         address addrB = localFactory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, localAdmin, salt2);
+        assertNotEq(addrA, addrB);
 
         Stablecoin scA = Stablecoin(addrA);
         Stablecoin scB = Stablecoin(addrB);

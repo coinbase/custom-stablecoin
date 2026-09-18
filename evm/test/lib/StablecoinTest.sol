@@ -110,6 +110,16 @@ contract StablecoinTest is Test {
         stablecoin.mint(burner, INITIAL_MINT);
     }
 
+    // ── Deployment helpers ────────────────────────────────────────────────────────────────
+
+    /// @dev Deploys a fresh Stablecoin proxy over the shared beacon, initialized with the default
+    /// token params and `admin_` as the default admin. Each call yields a distinct address.
+    function _deployStablecoin(address admin_) internal returns (address) {
+        bytes memory initData =
+            abi.encodeCall(Stablecoin.initialize, (TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, admin_));
+        return address(new MutableBeaconProxy(address(beacon), initData));
+    }
+
     // ── Mint helpers ──────────────────────────────────────────────────────────────────────
 
     /// @dev Mints `amount` tokens to `to` as the minter.

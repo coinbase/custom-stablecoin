@@ -9,3 +9,6 @@
 [submodule "evm/lib/openzeppelin-contracts"]
 	path = evm/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "evm/lib/base-std"]
+	path = evm/lib/base-std
+	url = https://github.com/base/base-std

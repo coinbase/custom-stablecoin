@@ -1,4 +1,10 @@
 {
+  "lib/base-std": {
+    "tag": {
+      "name": "v1.1.0",
+      "rev": "bbfb352e9fe2f67bf6ca33ea4d9a7f2fe0cca20d"
+    }
+  },
   "lib/forge-std": {
     "tag": {
       "name": "v1.15.0",

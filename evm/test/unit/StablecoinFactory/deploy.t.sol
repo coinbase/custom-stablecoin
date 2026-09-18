@@ -8,8 +8,8 @@ import {StablecoinFactory} from "src/StablecoinFactory.sol";
 
 import {StablecoinFactoryTest} from "test/lib/StablecoinFactoryTest.sol";
 
-/// @dev Unit tests for deploy() and computeAddress(). computeAddress tests are merged here
-/// because the core invariant is that the computed address equals the deployed address.
+/// @dev Unit tests for the legacy beacon-proxy deploy() and computeAddress(). computeAddress tests
+/// are merged here because the core invariant is that the computed address equals the deployed address.
 contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
     // ── Reverts ───────────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,14 @@ contract StablecoinFactoryDeployTest is StablecoinFactoryTest {
         );
         vm.prank(caller);
         factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, DEPLOY_SALT);
+    }
+
+    /// @notice Verifies deploy reverts when the stablecoin admin is the zero address
+    /// @dev Guard: every stablecoin deployment must retain an account that can configure the token
+    function test_deploy_revert_zeroAdmin(bytes32 salt) public {
+        vm.expectRevert(StablecoinFactory.StablecoinAdminRequired.selector);
+        vm.prank(deployer);
+        factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, address(0), salt);
     }
 
     /// @notice Verifies deploy reverts when the same salt is used twice

@@ -1,58 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.30;
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 import {RateLimit} from "src/lib/RateLimit.sol";
 import {Stablecoin} from "src/Stablecoin.sol";
-import {StablecoinFactory} from "src/StablecoinFactory.sol";
 import {TwoStepUpgradeableBeacon} from "src/TwoStepUpgradeableBeacon.sol";
 
 import {StablecoinTest} from "test/lib/StablecoinTest.sol";
 
 /// @dev Integration tests for multi-step admin workflows, permission choreography, and beacon
-/// upgrade / exitBeacon scenarios. Extends StablecoinTest (fully configured stablecoin) and
-/// sets up a StablecoinFactory in setUp for factory-related workflow tests.
+/// upgrade / exitBeacon scenarios. Extends StablecoinTest (fully configured stablecoin). Proxies
+/// used by the beacon-upgrade scenarios are constructed directly over the shared beacon.
 contract StablecoinWorkflowTest is StablecoinTest {
-    StablecoinFactory internal factory;
-
-    address internal deployer = makeAddr("deployer");
     address internal stablecoinAdmin = makeAddr("stablecoinAdmin");
-
-    uint48 internal constant ADMIN_DELAY = 0;
-    bytes32 internal constant SALT_A = bytes32(uint256(1));
-    bytes32 internal constant SALT_B = bytes32(uint256(2));
 
     function setUp() public override {
         super.setUp();
-
-        // Deploy a UUPS-proxied factory backed by the same beacon as the stablecoin
-        StablecoinFactory factoryImpl = new StablecoinFactory(address(beacon));
-        bytes memory factoryInitData = abi.encodeCall(StablecoinFactory.initialize, (admin, ADMIN_DELAY, deployer));
-        ERC1967Proxy factoryProxy = new ERC1967Proxy(address(factoryImpl), factoryInitData);
-        factory = StablecoinFactory(address(factoryProxy));
-
-        vm.label(address(factory), "StablecoinFactory");
-        vm.label(deployer, "deployer");
         vm.label(stablecoinAdmin, "stablecoinAdmin");
     }
 
     // ── Admin setup workflows ─────────────────────────────────────────────────────────────
 
-    /// @notice Verifies the complete admin setup sequence from factory deploy to first mint
-    /// @dev Integration: factory.deploy → grantRole(MINT_ROLE) → configureMinter → mint; asserts state at each step
+    /// @notice Verifies the complete admin setup sequence from proxy deploy to first mint
+    /// @dev Integration: deploy → grantRole(MINT_ROLE) → configureMinter → mint; asserts state at each step
     function test_workflow_fullAdminSetup() public {
-        // Step 1: Deploy a new stablecoin via factory
-        vm.prank(deployer);
-        address scAddr = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
+        // Step 1: Deploy a new stablecoin proxy
+        address scAddr = _deployStablecoin(stablecoinAdmin);
         assertGt(scAddr.code.length, 0);
 
         Stablecoin sc = Stablecoin(scAddr);
         assertEq(sc.name(), TOKEN_NAME);
         assertEq(sc.decimals(), TOKEN_DECIMALS);
 
-        // Step 2: Admin grants MINT_ROLE and MINT_RATE_LIMIT_ROLE to themselves
+        // Step 2: Admin grants MINT_ROLE and MINT_RATE_LIMIT_ROLE
         vm.startPrank(stablecoinAdmin);
         sc.grantRole(sc.MINT_ROLE(), minter);
         sc.grantRole(sc.MINT_RATE_LIMIT_ROLE(), stablecoinAdmin);
@@ -183,11 +164,9 @@ contract StablecoinWorkflowTest is StablecoinTest {
     /// @notice Verifies that upgrading the beacon changes the implementation for all standard proxies
     /// @dev Beacon upgrade: deploy two proxies → upgrade beacon → both proxies delegate to new impl
     function test_workflow_beaconUpgradeAffectsAllProxies() public {
-        // Deploy two stablecoin proxies via factory
-        vm.prank(deployer);
-        address proxyAddrA = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
-        vm.prank(deployer);
-        address proxyAddrB = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_B);
+        // Deploy two stablecoin proxies over the shared beacon
+        address proxyAddrA = _deployStablecoin(stablecoinAdmin);
+        address proxyAddrB = _deployStablecoin(stablecoinAdmin);
 
         // Both proxies follow beacon (override slot is empty)
         assertEq(address(uint160(uint256(vm.load(proxyAddrA, ERC1967Utils.IMPLEMENTATION_SLOT)))), address(0));
@@ -212,10 +191,8 @@ contract StablecoinWorkflowTest is StablecoinTest {
     /// @notice Verifies that a proxy pointed at a new beacon is not affected by upgrades to the original beacon
     /// @dev upgradeBeaconToAndCall isolation: proxy A switches beacon → upgrade original beacon → proxy A unaffected; proxy B follows
     function test_workflow_updateBeaconDecouplesFromOriginalBeacon() public {
-        vm.prank(deployer);
-        address proxyAddrA = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
-        vm.prank(deployer);
-        address proxyAddrB = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_B);
+        address proxyAddrA = _deployStablecoin(stablecoinAdmin);
+        address proxyAddrB = _deployStablecoin(stablecoinAdmin);
 
         // Proxy A switches to a separate beacon
         TwoStepUpgradeableBeacon beaconA = new TwoStepUpgradeableBeacon(address(stablecoinImpl), stablecoinAdmin);
@@ -243,8 +220,7 @@ contract StablecoinWorkflowTest is StablecoinTest {
     /// @notice Verifies that upgradeBeaconToAndCall can be called multiple times to redirect to successive beacons
     /// @dev Re-redirect: admin can call upgradeBeaconToAndCall again to switch to another beacon
     function test_workflow_updateBeaconCanBeRedirected() public {
-        vm.prank(deployer);
-        address proxyAddr = factory.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_DECIMALS, stablecoinAdmin, SALT_A);
+        address proxyAddr = _deployStablecoin(stablecoinAdmin);
 
         Stablecoin impl2 = new Stablecoin();
 
@@ -262,21 +238,5 @@ contract StablecoinWorkflowTest is StablecoinTest {
 
         // Proxy still functions
         assertEq(Stablecoin(proxyAddr).name(), TOKEN_NAME);
-    }
-
-    // ── Factory UUPS upgrade ──────────────────────────────────────────────────────────────
-
-    /// @notice Verifies the factory can be upgraded via UUPS while preserving the beacon address
-    /// @dev UUPS: DEFAULT_ADMIN upgrades factory impl; beacon() must return the same address after upgrade
-    function test_workflow_factoryUUPSUpgradePreservesBeacon() public {
-        address beaconBefore = factory.BEACON();
-
-        // Deploy a new factory implementation and upgrade
-        StablecoinFactory newFactoryImpl = new StablecoinFactory(address(beacon));
-        vm.prank(admin);
-        factory.upgradeToAndCall(address(newFactoryImpl), "");
-
-        // Beacon address is preserved in proxy storage across impl upgrade
-        assertEq(factory.BEACON(), beaconBefore);
     }
 }
